@@ -40,6 +40,22 @@ export function makeTestStore(seed: Seed = {}): AppStore {
     carryInboxOpen: false,
     appliedCarryByPlanId: {},
 
+    ensureInboxGoal: () => {
+      const existing = Object.values(store.goals).find((goal) => goal.title === 'Inbox' && goal.status === 'active');
+      if (existing) return existing.id;
+      const id = nextId('goal');
+      const ts = nowIso();
+      store.goals[id] = {
+        id,
+        title: 'Inbox',
+        description: 'Legacy and unlinked tasks',
+        dueType: 'none',
+        status: 'active',
+        createdAt: ts,
+        updatedAt: ts,
+      };
+      return id;
+    },
     createGoal: ({ title, description, dueType = 'none', dueDate }) => {
       const id = nextId('goal');
       const ts = nowIso();
@@ -57,8 +73,11 @@ export function makeTestStore(seed: Seed = {}): AppStore {
       store.goals[goalId] = { ...goal, status: 'archived', updatedAt: nowIso() };
     },
 
-    ensureWeekPlan: (periodStartIso, periodEndIso, sourcePlanId) => {
-      const existing = Object.values(store.plans).find((plan) => plan.type === 'week' && plan.periodStart === periodStartIso);
+    ensureWeekPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
+      const resolvedGoalId = goalId ?? store.ensureInboxGoal();
+      const existing = Object.values(store.plans).find(
+        (plan) => plan.type === 'week' && plan.periodStart === periodStartIso && plan.goalId === resolvedGoalId,
+      );
       if (existing) return existing.id;
       const id = nextId('plan');
       const ts = nowIso();
@@ -67,6 +86,7 @@ export function makeTestStore(seed: Seed = {}): AppStore {
         type: 'week',
         periodStart: periodStartIso,
         periodEnd: periodEndIso,
+        goalId: resolvedGoalId,
         note: '',
         top3TaskIds: [],
         createdFromPlanId: sourcePlanId,
@@ -97,6 +117,10 @@ export function makeTestStore(seed: Seed = {}): AppStore {
     },
 
     addTask: ({ planId, title, goalId, carryFromTaskId, splitParentTaskId }) => {
+      const plan = store.plans[planId];
+      if (!plan) {
+        throw new Error(`Plan not found for task creation: ${planId}`);
+      }
       const id = nextId('task');
       const order = Object.values(store.tasks).filter((task) => task.planId === planId).length;
       const ts = nowIso();
@@ -104,7 +128,7 @@ export function makeTestStore(seed: Seed = {}): AppStore {
         id,
         planId,
         title,
-        goalId,
+        goalId: goalId ?? plan.goalId,
         status: 'todo',
         order,
         carryFromTaskId,

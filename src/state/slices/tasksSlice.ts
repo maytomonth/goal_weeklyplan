@@ -6,9 +6,15 @@ import { AppStore, TasksSlice } from '@/src/state/types';
 export const createTasksSlice: StateCreator<AppStore, [], [], TasksSlice> = (set, get) => ({
   tasks: {},
   addTask: ({ planId, title, goalId, carryFromTaskId, splitParentTaskId }) => {
+    const plan = get().plans[planId];
+    if (!plan) {
+      throw new Error(`Plan not found for task creation: ${planId}`);
+    }
+
     const id = createId();
     const timestamp = nowIso();
     const order = Object.values(get().tasks).filter((task) => task.planId === planId).length;
+    const resolvedGoalId = goalId ?? plan.goalId;
 
     set((state) => ({
       tasks: {
@@ -16,7 +22,7 @@ export const createTasksSlice: StateCreator<AppStore, [], [], TasksSlice> = (set
         [id]: {
           id,
           planId,
-          goalId,
+          goalId: resolvedGoalId,
           title: title.trim(),
           status: 'todo',
           order,
@@ -36,6 +42,8 @@ export const createTasksSlice: StateCreator<AppStore, [], [], TasksSlice> = (set
       if (!task) {
         return state;
       }
+      const plan = state.plans[task.planId];
+      const enforcedGoalId = plan?.goalId ?? task.goalId;
 
       return {
         tasks: {
@@ -43,6 +51,7 @@ export const createTasksSlice: StateCreator<AppStore, [], [], TasksSlice> = (set
           [taskId]: {
             ...task,
             ...patch,
+            goalId: enforcedGoalId,
             updatedAt: nowIso(),
             completedAt:
               patch.status === 'done' ? nowIso() : patch.status === 'todo' ? undefined : task.completedAt,

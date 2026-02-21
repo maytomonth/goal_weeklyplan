@@ -18,6 +18,7 @@ export type CarryDraftByPlan = Record<ID, Record<ID, CarryDecisionDraft>>;
 
 export interface GoalsSlice {
   goals: GoalsById;
+  ensureInboxGoal: () => ID;
   createGoal: (input: {
     title: string;
     description?: string;
@@ -30,7 +31,12 @@ export interface GoalsSlice {
 
 export interface PlansSlice {
   plans: PlansById;
-  ensureWeekPlan: (periodStartIso: string, periodEndIso: string, sourcePlanId?: ID) => ID;
+  ensureWeekPlan: (
+    periodStartIso: string,
+    periodEndIso: string,
+    goalId?: ID,
+    sourcePlanId?: ID,
+  ) => ID;
   updatePlanNote: (planId: ID, note: string) => void;
   toggleTop3: (planId: ID, taskId: ID) => { ok: boolean; reason?: string };
   setSelectedWeekStart: (periodStartIso: string) => void;

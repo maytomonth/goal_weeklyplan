@@ -9,6 +9,7 @@ function makeWeeklySeed(): { plan: Plan; tasks: Task[] } {
     type: 'week',
     periodStart: '2026-02-22T15:00:00.000Z',
     periodEnd: '2026-03-01T15:00:00.000Z',
+    goalId: 'goal_a',
     note: '',
     top3TaskIds: [],
     createdAt: '2026-02-22T15:00:00.000Z',
@@ -19,6 +20,7 @@ function makeWeeklySeed(): { plan: Plan; tasks: Task[] } {
     {
       id: 't_carry',
       planId: plan.id,
+      goalId: 'goal_a',
       title: 'carry me',
       status: 'todo',
       order: 0,
@@ -28,6 +30,7 @@ function makeWeeklySeed(): { plan: Plan; tasks: Task[] } {
     {
       id: 't_drop',
       planId: plan.id,
+      goalId: 'goal_a',
       title: 'drop me',
       status: 'todo',
       order: 1,
@@ -37,6 +40,7 @@ function makeWeeklySeed(): { plan: Plan; tasks: Task[] } {
     {
       id: 't_rescope',
       planId: plan.id,
+      goalId: 'goal_a',
       title: 'big scope',
       status: 'todo',
       order: 2,
@@ -46,6 +50,7 @@ function makeWeeklySeed(): { plan: Plan; tasks: Task[] } {
     {
       id: 't_split',
       planId: plan.id,
+      goalId: 'goal_a',
       title: 'split scope',
       status: 'todo',
       order: 3,
@@ -55,6 +60,7 @@ function makeWeeklySeed(): { plan: Plan; tasks: Task[] } {
     {
       id: 't_done',
       planId: plan.id,
+      goalId: 'goal_a',
       title: 'already done',
       status: 'done',
       order: 4,

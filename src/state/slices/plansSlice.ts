@@ -5,9 +5,13 @@ import { AppStore, PlansSlice } from '@/src/state/types';
 
 export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set, get) => ({
   plans: {},
-  ensureWeekPlan: (periodStartIso, periodEndIso, sourcePlanId) => {
+  ensureWeekPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
+    const resolvedGoalId = goalId ?? get().ensureInboxGoal();
     const existing = Object.values(get().plans).find(
-      (plan) => plan.type === 'week' && plan.periodStart === periodStartIso,
+      (plan) =>
+        plan.type === 'week' &&
+        plan.periodStart === periodStartIso &&
+        plan.goalId === resolvedGoalId,
     );
 
     if (existing) {
@@ -25,6 +29,7 @@ export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set
           type: 'week',
           periodStart: periodStartIso,
           periodEnd: periodEndIso,
+          goalId: resolvedGoalId,
           note: '',
           top3TaskIds: [],
           createdFromPlanId: sourcePlanId,

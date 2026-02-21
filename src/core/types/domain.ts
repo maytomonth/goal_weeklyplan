@@ -20,6 +20,7 @@ export interface Plan {
   type: 'week';
   periodStart: ISODateTime;
   periodEnd: ISODateTime;
+  goalId: ID;
   note: string;
   top3TaskIds: ID[];
   createdFromPlanId?: ID;
@@ -32,7 +33,7 @@ export type TaskStatus = 'todo' | 'done' | 'dropped';
 export interface Task {
   id: ID;
   planId: ID;
-  goalId?: ID;
+  goalId: ID;
   title: string;
   status: TaskStatus;
   order: number;

@@ -39,7 +39,8 @@ export function makeTestStore(seed: Seed = {}): AppStore {
     selectedPlanId: null,
     carryInboxOpen: false,
     appliedCarryByPlanId: {},
-    migratedToMvp2: false,
+    schemaVersion: 1,
+    recentGoalIds: [],
 
     ensureInboxGoal: () => {
       const existing = Object.values(store.goals).find((goal) => goal.title === 'Inbox' && goal.status === 'active');
@@ -261,8 +262,11 @@ export function makeTestStore(seed: Seed = {}): AppStore {
     markCarryApplied: (planId) => {
       store.appliedCarryByPlanId[planId] = true;
     },
-    markMigratedToMvp2: () => {
-      store.migratedToMvp2 = true;
+    setSchemaVersion: (version) => {
+      store.schemaVersion = version;
+    },
+    pushRecentGoal: (goalId) => {
+      store.recentGoalIds = [goalId, ...store.recentGoalIds.filter((id) => id !== goalId)].slice(0, 10);
     },
   };
 

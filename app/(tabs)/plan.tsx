@@ -1,12 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
-import { formatWeekLabel, getWeekPeriod } from '@/src/core/time/week';
+import { getWeekPeriod } from '@/src/core/time/week';
 import { isBlank, normalizeTitle } from '@/src/core/validation/form';
 import { Task } from '@/src/core/types/domain';
+import { WeekNav } from '@/src/components/WeekNav';
 import { useToast } from '@/src/components/toast/ToastProvider';
-import { selectPlansByPeriod, selectTasksByPlan } from '@/src/state/selectors/planSelectors';
+import {
+  selectTasksByPlan,
+  selectWeeklyPlansForWeek,
+} from '@/src/state/selectors/planSelectors';
 import { useAppStore } from '@/src/state/store';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -15,22 +28,27 @@ export default function PlanScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [goalSearch, setGoalSearch] = useState('');
 
   const selectedWeekStartIso = useAppStore((state) => state.selectedWeekStartIso);
   const selectedPlanId = useAppStore((state) => state.selectedPlanId);
   const setSelectedWeekStart = useAppStore((state) => state.setSelectedWeekStart);
   const setSelectedPlanId = useAppStore((state) => state.setSelectedPlanId);
-  const ensureWeekPlan = useAppStore((state) => state.ensureWeekPlan);
+  const ensureGoalWeeklyPlan = useAppStore((state) => state.ensureGoalWeeklyPlan);
   const updatePlanNote = useAppStore((state) => state.updatePlanNote);
   const toggleTop3 = useAppStore((state) => state.toggleTop3);
   const addTask = useAppStore((state) => state.addTask);
   const updateTask = useAppStore((state) => state.updateTask);
   const toggleTaskDone = useAppStore((state) => state.toggleTaskDone);
   const reorderTask = useAppStore((state) => state.reorderTask);
+  const pushRecentGoal = useAppStore((state) => state.pushRecentGoal);
 
   const goals = useAppStore((state) => state.goals);
   const plansById = useAppStore((state) => state.plans);
+  const reviewsById = useAppStore((state) => state.reviews);
   const allTasks = useAppStore((state) => state.tasks);
+  const recentGoalIds = useAppStore((state) => state.recentGoalIds);
 
   const period = useMemo(() => {
     if (selectedWeekStartIso) {
@@ -48,11 +66,11 @@ export default function PlanScreen() {
     setSelectedWeekStart(periodStartIso);
   }, [periodStartIso, setSelectedWeekStart]);
 
-  const plans = useAppStore((state) => selectPlansByPeriod(state, periodStartIso));
+  const plans = useAppStore((state) => selectWeeklyPlansForWeek(state, periodStartIso));
 
   useEffect(() => {
     if (!plans.some((plan) => plan.id === selectedPlanId)) {
-      setSelectedPlanId(plans[0]?.id ?? null);
+      setSelectedPlanId(null);
     }
   }, [plans, selectedPlanId, setSelectedPlanId]);
 
@@ -64,16 +82,46 @@ export default function PlanScreen() {
     [goals],
   );
 
-  const createOrOpenGoalPlan = (goalId: string) => {
-    const planId = ensureWeekPlan(periodStartIso, periodEndIso, goalId);
-    setSelectedPlanId(planId);
-    showToast('목표 플랜을 열었습니다.', 'success');
-  };
+  const filteredGoals = useMemo(() => {
+    const q = goalSearch.trim().toLowerCase();
+    if (!q) {
+      return activeGoals;
+    }
+    return activeGoals.filter((goal) => goal.title.toLowerCase().includes(q));
+  }, [activeGoals, goalSearch]);
+
+  const recentGoals = useMemo(() => {
+    return recentGoalIds
+      .map((goalId) => goals[goalId])
+      .filter((goal): goal is NonNullable<typeof goal> => Boolean(goal) && goal.status === 'active')
+      .slice(0, 5)
+      .filter((goal) => goalSearch.trim().length === 0 || goal.title.toLowerCase().includes(goalSearch.trim().toLowerCase()));
+  }, [goalSearch, goals, recentGoalIds]);
+
+  const allGoalsWithoutRecent = useMemo(() => {
+    const recentSet = new Set(recentGoals.map((goal) => goal.id));
+    return filteredGoals.filter((goal) => !recentSet.has(goal.id));
+  }, [filteredGoals, recentGoals]);
 
   const moveWeek = (direction: -1 | 1) => {
     const nextStart = new Date(period.start.getTime() + direction * 7 * DAY_MS);
     setSelectedWeekStart(nextStart.toISOString());
     setSelectedPlanId(null);
+  };
+
+  const moveCurrentWeek = () => {
+    const current = getWeekPeriod(new Date()).start.toISOString();
+    setSelectedWeekStart(current);
+    setSelectedPlanId(null);
+  };
+
+  const openOrCreateGoalPlan = (goalId: string) => {
+    const planId = ensureGoalWeeklyPlan(periodStartIso, periodEndIso, goalId);
+    setSelectedPlanId(planId);
+    pushRecentGoal(goalId);
+    setPickerVisible(false);
+    setGoalSearch('');
+    showToast('목표 플랜을 열었습니다.', 'success');
   };
 
   const submitTask = () => {
@@ -93,6 +141,7 @@ export default function PlanScreen() {
       title,
       goalId: selectedPlan.goalId,
     });
+    pushRecentGoal(selectedPlan.goalId);
     setNewTaskTitle('');
     showToast('Task를 추가했습니다.', 'success');
   };
@@ -141,70 +190,120 @@ export default function PlanScreen() {
 
         <View style={styles.taskActions}>
           <Pressable style={styles.ghostButton} onPress={() => onToggleTop3(item.id)}>
-            <Text style={styles.ghostButtonText}>Top3</Text>
+            <Text style={styles.ghostButtonText}>☆ Top3</Text>
           </Pressable>
         </View>
       </View>
     </ScaleDecorator>
   );
 
+  const renderPlanCard = (planId: string) => {
+    const plan = plansById[planId];
+    if (!plan) return null;
+
+    const goal = goals[plan.goalId];
+    const planTasks = Object.values(allTasks).filter((task) => task.planId === plan.id);
+    const doneCount = planTasks.filter((task) => task.status === 'done').length;
+    const todoCount = planTasks.filter((task) => task.status === 'todo').length;
+    const denominator = planTasks.filter((task) => task.status !== 'dropped').length;
+    const completion = denominator === 0 ? 0 : doneCount / denominator;
+    const review = Object.values(reviewsById).find((entry) => entry.planId === plan.id);
+
+    let reviewBadge = '리뷰 필요';
+    if (review) reviewBadge = '리뷰 있음';
+    if (todoCount > 0) reviewBadge = `${reviewBadge} · Carry 필요`;
+
+    const top3Preview = (plan.top3TaskIds ?? [])
+      .slice(0, 3)
+      .map((taskId) => allTasks[taskId]?.title)
+      .filter((title): title is string => Boolean(title));
+
+    return (
+      <View
+        key={plan.id}
+        style={[styles.planCard, selectedPlan?.id === plan.id ? styles.planCardActive : undefined]}
+      >
+        <Pressable
+          onPress={() => {
+            setSelectedPlanId(plan.id);
+            pushRecentGoal(plan.goalId);
+          }}
+        >
+          <Text style={styles.planCardTitle}>{goal?.title ?? 'Unknown Goal'}</Text>
+          <Text style={styles.muted}>완료율 {(completion * 100).toFixed(0)}% · 완료 {doneCount} · 남은 {todoCount}</Text>
+          <Text style={styles.badgeText}>{reviewBadge}</Text>
+          {top3Preview.map((title, index) => (
+            <Text key={`${plan.id}-top3-${index}`} style={styles.previewText} numberOfLines={1}>
+              • {title}
+            </Text>
+          ))}
+        </Pressable>
+        <View style={styles.cardActionRow}>
+          <Pressable
+            style={styles.inlineActionBtn}
+            onPress={() => {
+              setSelectedPlanId(plan.id);
+              pushRecentGoal(plan.goalId);
+            }}
+          >
+            <Text style={styles.inlineActionText}>열기</Text>
+          </Pressable>
+          <Pressable
+            style={styles.inlineActionBtn}
+            onPress={() => {
+              setSelectedPlanId(plan.id);
+              pushRecentGoal(plan.goalId);
+              router.push('/review');
+            }}
+          >
+            <Text style={styles.inlineActionText}>리뷰</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
   const renderPlanHub = (
     <View style={styles.headerBlock}>
       <View style={styles.headerRow}>
-        <Pressable style={styles.weekButton} onPress={() => moveWeek(-1)}>
-          <Text style={styles.weekButtonText}>Prev</Text>
-        </Pressable>
-        <Text style={styles.weekLabel}>{formatWeekLabel(period.start)}</Text>
-        <Pressable style={styles.weekButton} onPress={() => moveWeek(1)}>
-          <Text style={styles.weekButtonText}>Next</Text>
+        <WeekNav weekStartIso={periodStartIso} onMoveWeek={moveWeek} onMoveCurrentWeek={moveCurrentWeek} />
+        <Pressable style={styles.primaryCreateBtn} onPress={() => setPickerVisible(true)}>
+          <Text style={styles.primaryCreateBtnText}>+ 목표 플랜 추가</Text>
         </Pressable>
       </View>
 
       <Text style={styles.sectionTitle}>이번 주 목표 플랜</Text>
-      <View style={styles.goalCreateWrap}>
-        {activeGoals.map((goal) => (
-          <Pressable key={goal.id} style={styles.goalCreateChip} onPress={() => createOrOpenGoalPlan(goal.id)}>
-            <Text style={styles.goalCreateChipText}>+ {goal.title}</Text>
+
+      {plans.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>이번 주에 운영할 목표를 추가해보세요</Text>
+          <Text style={styles.muted}>목표별로 주간 플랜을 만들고, 노트와 할 일을 관리합니다.</Text>
+          <Pressable style={styles.primaryCreateBtn} onPress={() => setPickerVisible(true)}>
+            <Text style={styles.primaryCreateBtnText}>+ 목표 플랜 추가</Text>
           </Pressable>
-        ))}
-      </View>
-
-      {plans.length === 0 ? <Text style={styles.muted}>이번 주 목표 플랜이 없습니다. 위에서 목표를 선택하세요.</Text> : null}
-
-      {plans.map((plan) => {
-        const goal = goals[plan.goalId];
-        const planTasks = Object.values(allTasks).filter((task) => task.planId === plan.id);
-        const done = planTasks.filter((task) => task.status === 'done').length;
-        const todo = planTasks.filter((task) => task.status === 'todo').length;
-        const denominator = planTasks.filter((task) => task.status !== 'dropped').length;
-        const completion = denominator === 0 ? 0 : done / denominator;
-
-        return (
-          <Pressable
-            key={plan.id}
-            style={[styles.planCard, selectedPlan?.id === plan.id ? styles.planCardActive : undefined]}
-            onPress={() => setSelectedPlanId(plan.id)}
-          >
-            <Text style={styles.planCardTitle}>{goal?.title ?? 'Unknown Goal'}</Text>
-            <Text style={styles.muted}>완료율 {(completion * 100).toFixed(0)}% · 남은 {todo}개</Text>
-            <Text style={styles.muted}>Top3 {(plan.top3TaskIds ?? []).length}개</Text>
-          </Pressable>
-        );
-      })}
+        </View>
+      ) : (
+        plans.map((plan) => renderPlanCard(plan.id))
+      )}
 
       {selectedPlan ? (
         <>
           <View style={styles.detailHeaderRow}>
-            <Text style={styles.sectionTitle}>Plan Detail · {goals[selectedPlan.goalId]?.title ?? 'Unknown'}</Text>
-            <Pressable style={styles.reviewButton} onPress={() => router.push('/review')}>
-              <Text style={styles.reviewButtonText}>Review</Text>
-            </Pressable>
+            <View style={styles.detailHeaderActions}>
+              <Pressable style={styles.inlineActionBtn} onPress={() => setSelectedPlanId(null)}>
+                <Text style={styles.inlineActionText}>목록으로</Text>
+              </Pressable>
+              <Pressable style={styles.reviewButton} onPress={() => router.push('/review')}>
+                <Text style={styles.reviewButtonText}>리뷰</Text>
+              </Pressable>
+            </View>
           </View>
+          <Text style={styles.sectionTitle}>Plan Detail · {goals[selectedPlan.goalId]?.title ?? 'Unknown'}</Text>
 
-          <Text style={styles.sectionTitle}>Plan Note</Text>
+          <Text style={styles.sectionTitle}>Note</Text>
           <TextInput
             multiline
-            placeholder="이번 주 의도/전략/주의점..."
+            placeholder="이번 주 이 목표를 어떻게 운영할까?"
             value={selectedPlan.note ?? ''}
             onChangeText={(text) => updatePlanNote(selectedPlan.id, text)}
             style={styles.noteInput}
@@ -214,9 +313,7 @@ export default function PlanScreen() {
           <View style={styles.top3Wrap}>
             {(selectedPlan.top3TaskIds ?? []).map((taskId) => {
               const topTask = tasks.find((task) => task.id === taskId);
-              if (!topTask) {
-                return null;
-              }
+              if (!topTask) return null;
               return (
                 <View key={taskId} style={styles.top3Badge}>
                   <Text style={styles.top3Text}>{topTask.title}</Text>
@@ -226,7 +323,7 @@ export default function PlanScreen() {
             {(selectedPlan.top3TaskIds ?? []).length === 0 ? <Text style={styles.muted}>아직 없음</Text> : null}
           </View>
 
-          <Text style={styles.sectionTitle}>Tasks</Text>
+          <Text style={styles.sectionTitle}>할 일</Text>
           <View style={styles.addRow}>
             <TextInput
               style={styles.addInput}
@@ -240,93 +337,146 @@ export default function PlanScreen() {
             </Pressable>
           </View>
 
-          {tasks.length === 0 ? <Text style={styles.muted}>할 일을 추가해보세요.</Text> : null}
+          {tasks.length === 0 ? <Text style={styles.muted}>이번 주 이 목표의 할 일을 추가해보세요</Text> : null}
           <Text style={styles.hint}>
-            {Platform.OS === 'web'
-              ? '웹에서는 Up/Down 버튼으로 정렬하세요.'
-              : 'Task 우측 핸들을 길게 눌러 드래그 정렬하세요.'}
+            {Platform.OS === 'web' ? '웹에서는 Up/Down 버튼으로 정렬하세요.' : 'Task 우측 핸들을 길게 눌러 드래그 정렬하세요.'}
           </Text>
         </>
       ) : null}
     </View>
   );
 
-  if (!selectedPlan || Platform.OS === 'web') {
-    return (
-      <FlatList
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        data={selectedPlan ? tasks : []}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderPlanHub}
-        renderItem={({ item, index }) => (
-          <View style={styles.taskCard}>
-            <View style={styles.taskRow}>
-              <Pressable style={styles.checkbox} onPress={() => toggleTaskDone(item.id)}>
-                <Text style={styles.checkboxText}>{item.status === 'done' ? '✓' : ''}</Text>
-              </Pressable>
-              <TextInput
-                style={styles.taskInput}
-                value={item.title}
-                onChangeText={(text) => updateTask(item.id, { title: text })}
-                onBlur={() => onTaskTitleBlur(item.id, item.title)}
-              />
-            </View>
-            <View style={styles.taskActions}>
-              <Pressable
-                style={styles.ghostButton}
-                onPress={() => {
-                  if (!selectedPlan) return;
-                  const ordered = tasks.map((task) => task.id);
-                  const next = index - 1;
-                  if (next < 0) return;
-                  const [picked] = ordered.splice(index, 1);
-                  ordered.splice(next, 0, picked);
-                  reorderTask(selectedPlan.id, ordered);
-                }}
-              >
-                <Text style={styles.ghostButtonText}>Up</Text>
-              </Pressable>
-              <Pressable
-                style={styles.ghostButton}
-                onPress={() => {
-                  if (!selectedPlan) return;
-                  const ordered = tasks.map((task) => task.id);
-                  const next = index + 1;
-                  if (next >= ordered.length) return;
-                  const [picked] = ordered.splice(index, 1);
-                  ordered.splice(next, 0, picked);
-                  reorderTask(selectedPlan.id, ordered);
-                }}
-              >
-                <Text style={styles.ghostButtonText}>Down</Text>
-              </Pressable>
-              <Pressable style={styles.ghostButton} onPress={() => onToggleTop3(item.id)}>
-                <Text style={styles.ghostButtonText}>Top3</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-        ListFooterComponent={<View style={{ height: 12 }} />}
+  const goalPickerBody = (
+    <View style={styles.modalCard}>
+      <Text style={styles.modalTitle}>목표 선택</Text>
+      <TextInput
+        style={styles.modalSearch}
+        placeholder="목표 검색"
+        value={goalSearch}
+        onChangeText={setGoalSearch}
       />
-    );
-  }
+
+      {activeGoals.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>먼저 목표를 만들어주세요</Text>
+          <Pressable
+            style={styles.primaryCreateBtn}
+            onPress={() => {
+              setPickerVisible(false);
+              router.push('/goals');
+            }}
+          >
+            <Text style={styles.primaryCreateBtnText}>목표 만들기</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          {recentGoals.length > 0 ? <Text style={styles.modalSection}>최근 사용한 목표</Text> : null}
+          {recentGoals.map((goal) => (
+            <Pressable key={`recent-${goal.id}`} style={styles.goalItem} onPress={() => openOrCreateGoalPlan(goal.id)}>
+              <Text style={styles.goalItemTitle}>{goal.title}</Text>
+              <Text style={styles.muted}>{goal.dueType === 'date' ? goal.dueDate : '기한 없음'}</Text>
+            </Pressable>
+          ))}
+
+          <Text style={styles.modalSection}>전체 목표</Text>
+          {allGoalsWithoutRecent.map((goal) => (
+            <Pressable key={goal.id} style={styles.goalItem} onPress={() => openOrCreateGoalPlan(goal.id)}>
+              <Text style={styles.goalItemTitle}>{goal.title}</Text>
+              <Text style={styles.muted}>{goal.dueType === 'date' ? goal.dueDate : '기한 없음'}</Text>
+            </Pressable>
+          ))}
+        </>
+      )}
+
+      <Pressable style={styles.modalCloseBtn} onPress={() => setPickerVisible(false)}>
+        <Text style={styles.modalCloseText}>닫기</Text>
+      </Pressable>
+    </View>
+  );
+
+  const useFlat = !selectedPlan || Platform.OS === 'web';
 
   return (
-    <DraggableFlatList
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      data={tasks}
-      keyExtractor={(item) => item.id}
-      renderItem={renderTaskItem}
-      onDragEnd={({ data }) => {
-        reorderTask(selectedPlan.id, data.map((task) => task.id));
-        showToast('Task 순서를 변경했습니다.', 'success');
-      }}
-      activationDistance={8}
-      ListHeaderComponent={renderPlanHub}
-      ListFooterComponent={<View style={{ height: 12 }} />}
-    />
+    <>
+      {useFlat ? (
+        <FlatList
+          style={styles.container}
+          contentContainerStyle={styles.content}
+          data={selectedPlan ? tasks : []}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderPlanHub}
+          renderItem={({ item, index }) => (
+            <View style={styles.taskCard}>
+              <View style={styles.taskRow}>
+                <Pressable style={styles.checkbox} onPress={() => toggleTaskDone(item.id)}>
+                  <Text style={styles.checkboxText}>{item.status === 'done' ? '✓' : ''}</Text>
+                </Pressable>
+                <TextInput
+                  style={styles.taskInput}
+                  value={item.title}
+                  onChangeText={(text) => updateTask(item.id, { title: text })}
+                  onBlur={() => onTaskTitleBlur(item.id, item.title)}
+                />
+              </View>
+              <View style={styles.taskActions}>
+                <Pressable
+                  style={styles.ghostButton}
+                  onPress={() => {
+                    if (!selectedPlan) return;
+                    const ordered = tasks.map((task) => task.id);
+                    const next = index - 1;
+                    if (next < 0) return;
+                    const [picked] = ordered.splice(index, 1);
+                    ordered.splice(next, 0, picked);
+                    reorderTask(selectedPlan.id, ordered);
+                  }}
+                >
+                  <Text style={styles.ghostButtonText}>Up</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.ghostButton}
+                  onPress={() => {
+                    if (!selectedPlan) return;
+                    const ordered = tasks.map((task) => task.id);
+                    const next = index + 1;
+                    if (next >= ordered.length) return;
+                    const [picked] = ordered.splice(index, 1);
+                    ordered.splice(next, 0, picked);
+                    reorderTask(selectedPlan.id, ordered);
+                  }}
+                >
+                  <Text style={styles.ghostButtonText}>Down</Text>
+                </Pressable>
+                <Pressable style={styles.ghostButton} onPress={() => onToggleTop3(item.id)}>
+                  <Text style={styles.ghostButtonText}>☆ Top3</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+          ListFooterComponent={<View style={{ height: 12 }} />}
+        />
+      ) : (
+        <DraggableFlatList
+          style={styles.container}
+          contentContainerStyle={styles.content}
+          data={tasks}
+          keyExtractor={(item) => item.id}
+          renderItem={renderTaskItem}
+          onDragEnd={({ data }) => {
+            reorderTask(selectedPlan.id, data.map((task) => task.id));
+            showToast('Task 순서를 변경했습니다.', 'success');
+          }}
+          activationDistance={8}
+          ListHeaderComponent={renderPlanHub}
+          ListFooterComponent={<View style={{ height: 12 }} />}
+        />
+      )}
+
+      <Modal visible={pickerVisible} transparent animationType="fade" onRequestClose={() => setPickerVisible(false)}>
+        <View style={styles.modalOverlay}>{goalPickerBody}</View>
+      </Modal>
+    </>
   );
 }
 
@@ -334,32 +484,47 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f6f5' },
   content: { padding: 16, gap: 12 },
   headerBlock: { gap: 12 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  weekLabel: { fontSize: 17, fontWeight: '700' },
-  weekButton: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  weekButtonText: { color: 'white', fontWeight: '600' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   sectionTitle: { fontWeight: '700', fontSize: 16, marginTop: 4 },
-  goalCreateWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  goalCreateChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#0f766e',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#ecfeff',
+  primaryCreateBtn: {
+    backgroundColor: '#0f766e',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  goalCreateChipText: { color: '#0f766e', fontWeight: '700' },
+  primaryCreateBtnText: { color: '#fff', fontWeight: '700' },
   planCard: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#d1d5db',
     padding: 10,
     backgroundColor: '#fff',
-    gap: 4,
+    gap: 6,
   },
   planCardActive: { borderColor: '#0f766e', backgroundColor: '#f0fdfa' },
   planCardTitle: { fontWeight: '700', fontSize: 15 },
+  badgeText: { color: '#0f766e', fontWeight: '700', fontSize: 12 },
+  previewText: { color: '#334155', fontSize: 12 },
+  cardActionRow: { flexDirection: 'row', gap: 8 },
+  inlineActionBtn: {
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  inlineActionText: { color: '#334155', fontWeight: '600' },
+  emptyCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    backgroundColor: '#fff',
+    padding: 12,
+    gap: 8,
+  },
+  emptyTitle: { fontWeight: '700', color: '#111827' },
   detailHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  detailHeaderActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   reviewButton: {
     borderRadius: 8,
     backgroundColor: '#1f2937',
@@ -439,4 +604,48 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   ghostButtonText: { color: '#334155', fontWeight: '600' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '85%',
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    padding: 14,
+    gap: 10,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  modalSearch: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  modalSection: { fontWeight: '700', color: '#334155', marginTop: 4 },
+  goalItem: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 10,
+    gap: 4,
+  },
+  goalItemTitle: { fontWeight: '700', color: '#0f172a' },
+  modalCloseBtn: {
+    marginTop: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  modalCloseText: { color: '#334155', fontWeight: '700' },
 });

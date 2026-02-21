@@ -2,15 +2,15 @@ import { nowIso } from '@/src/core/time/week';
 import { ID } from '@/src/core/types/domain';
 import { AppStore } from '@/src/state/types';
 
+export const MVP2_SCHEMA_VERSION = 2;
+
 function resolveTaskGoalId(store: AppStore, task: AppStore['tasks'][string], fallbackGoalId: ID): ID {
-  if (task.goalId) {
-    return task.goalId;
-  }
+  if (task.goalId) return task.goalId;
   return fallbackGoalId;
 }
 
 export function runMvp2Migration(store: AppStore) {
-  if (store.migratedToMvp2) {
+  if (store.schemaVersion >= MVP2_SCHEMA_VERSION) {
     return;
   }
 
@@ -26,7 +26,8 @@ export function runMvp2Migration(store: AppStore) {
     const groupedByGoal = new Map<ID, typeof planTasks>();
 
     for (const task of planTasks) {
-      const resolvedGoalId = resolveTaskGoalId(store, task, baseGoalId);
+      // PRD v2: goalId 없는 task는 Inbox goal로 강제 이관
+      const resolvedGoalId = resolveTaskGoalId(store, task, inboxGoalId);
       const bucket = groupedByGoal.get(resolvedGoalId) ?? [];
       bucket.push(task);
       groupedByGoal.set(resolvedGoalId, bucket);
@@ -84,5 +85,5 @@ export function runMvp2Migration(store: AppStore) {
     }
   }
 
-  store.markMigratedToMvp2();
+  store.setSchemaVersion(MVP2_SCHEMA_VERSION);
 }

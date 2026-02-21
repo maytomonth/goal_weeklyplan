@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { applyCarryActionsAndEnsureNextPlan } from '@/src/services/carryService';
 import { useToast } from '@/src/components/toast/ToastProvider';
 import { selectTasksByPlan } from '@/src/state/selectors/planSelectors';
 import { selectCarryDraft } from '@/src/state/selectors/reviewSelectors';
@@ -16,8 +15,6 @@ export default function CarryInboxModal() {
   const selectedPlanId = useAppStore((state) => state.selectedPlanId);
   const plans = useAppStore((state) => state.plans);
   const goals = useAppStore((state) => state.goals);
-  const setSelectedPlanId = useAppStore((state) => state.setSelectedPlanId);
-  const setSelectedWeekStart = useAppStore((state) => state.setSelectedWeekStart);
 
   const setCarryDecision = useAppStore((state) => state.setCarryDecision);
   const setDropNote = useAppStore((state) => state.setDropNote);
@@ -31,16 +28,19 @@ export default function CarryInboxModal() {
 
   const incompleteTasks = useMemo(() => tasks.filter((task) => task.status === 'todo'), [tasks]);
 
-  const validateBeforeApply = () => {
+  const validateDraft = () => {
     for (const task of incompleteTasks) {
       const decision = draft[task.id];
+      if (!decision?.action) {
+        continue;
+      }
 
-      if (decision?.action === 'rescope' && !decision.rescopeTitle.trim()) {
+      if (decision.action === 'rescope' && !decision.rescopeTitle.trim()) {
         showToast(`"${task.title}"의 Rescope 제목을 입력하세요.`, 'error');
         return false;
       }
 
-      if (decision?.action === 'split') {
+      if (decision.action === 'split') {
         const validChildren = decision.splitTitles.map((title) => title.trim()).filter(Boolean);
         if (validChildren.length === 0) {
           showToast(`"${task.title}"의 Split 하위 Task를 1개 이상 입력하세요.`, 'error');
@@ -51,34 +51,17 @@ export default function CarryInboxModal() {
     return true;
   };
 
-  const applyAndClose = () => {
-    if (!plan) {
-      return;
-    }
-
-    if (!validateBeforeApply()) {
-      return;
-    }
-
-    const nextPlanId = applyCarryActionsAndEnsureNextPlan(useAppStore.getState(), plan.id, {
-      defaultUndecidedToCarry: true,
-    });
-    const latestState = useAppStore.getState();
-    const nextPlan = latestState.plans[nextPlanId];
-    if (nextPlan) {
-      setSelectedWeekStart(nextPlan.periodStart);
-      setSelectedPlanId(nextPlanId);
-    }
-
-    showToast('Carry 적용 후 다음 주 목표 플랜으로 이동합니다.', 'success');
+  const onSaveDraft = () => {
+    if (!plan) return;
+    if (!validateDraft()) return;
+    showToast('저장됨', 'success');
     router.dismiss();
-    router.replace('/plan');
   };
 
   if (!plan) {
     return (
       <View style={[styles.container, styles.empty]}>
-        <Text style={styles.title}>Carry Inbox</Text>
+        <Text style={styles.title}>미완료 정리</Text>
         <Text style={styles.subtitle}>선택된 목표 플랜이 없습니다. Review에서 플랜을 먼저 선택하세요.</Text>
       </View>
     );
@@ -86,8 +69,16 @@ export default function CarryInboxModal() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Carry Inbox</Text>
-      <Text style={styles.subtitle}>{goals[plan.goalId]?.title ?? 'Unknown'} · 미완료 Task 처리</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerTexts}>
+          <Text style={styles.title}>미완료 정리</Text>
+          <Text style={styles.subtitle}>다음 주로 넘길지, 쪼갤지, 제외할지 결정하세요</Text>
+          <Text style={styles.goalName}>{goals[plan.goalId]?.title ?? 'Unknown Goal'}</Text>
+        </View>
+        <Pressable style={styles.closeButton} onPress={() => router.dismiss()}>
+          <Text style={styles.closeButtonText}>X</Text>
+        </Pressable>
+      </View>
 
       <Pressable
         style={styles.ghostButton}
@@ -99,12 +90,12 @@ export default function CarryInboxModal() {
           showToast('미선택 항목을 carry로 지정했습니다.', 'info');
         }}
       >
-        <Text style={styles.ghostButtonText}>일괄 Carry (미선택만)</Text>
+        <Text style={styles.ghostButtonText}>일괄 Carry</Text>
       </Pressable>
 
       {incompleteTasks.map((task) => {
         const decision = draft[task.id];
-        const splitTitles = decision?.splitTitles?.length ? decision.splitTitles : [''];
+        const splitTitles = decision?.splitTitles?.length ? decision.splitTitles : ['', ''];
 
         return (
           <View key={task.id} style={styles.card}>
@@ -153,7 +144,7 @@ export default function CarryInboxModal() {
                   <TextInput
                     key={`${task.id}-split-${idx}`}
                     style={styles.input}
-                    placeholder={`하위 Task ${idx + 1}`}
+                    placeholder={`하위 할 일 ${idx + 1}`}
                     value={title}
                     onChangeText={(text) => {
                       const next = [...splitTitles];
@@ -169,7 +160,7 @@ export default function CarryInboxModal() {
                   style={styles.smallButton}
                   onPress={() => setSplitChildren(plan.id, task.id, [...splitTitles, ''])}
                 >
-                  <Text style={styles.smallButtonText}>+ add subtask</Text>
+                  <Text style={styles.smallButtonText}>+ 하위 할 일 추가</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -177,8 +168,8 @@ export default function CarryInboxModal() {
         );
       })}
 
-      <Pressable style={styles.primaryButton} onPress={applyAndClose}>
-        <Text style={styles.primaryButtonText}>Apply & Next Week Plan</Text>
+      <Pressable style={styles.primaryButton} onPress={onSaveDraft}>
+        <Text style={styles.primaryButtonText}>저장</Text>
       </Pressable>
     </ScrollView>
   );
@@ -188,8 +179,22 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   content: { padding: 16, gap: 12 },
   empty: { padding: 16 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  headerTexts: { flex: 1, gap: 2 },
   title: { fontSize: 22, fontWeight: '700' },
   subtitle: { color: '#475569' },
+  goalName: { color: '#0f172a', fontWeight: '700' },
+  closeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  closeButtonText: { color: '#334155', fontWeight: '700' },
   ghostButton: {
     borderWidth: 1,
     borderColor: '#94a3b8',

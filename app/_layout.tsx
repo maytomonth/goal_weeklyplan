@@ -3,17 +3,17 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ToastProvider } from '@/src/components/toast/ToastProvider';
-import { runMvp2Migration } from '@/src/services/migrationService';
+import { MVP2_SCHEMA_VERSION, runMvp2Migration } from '@/src/services/migrationService';
 import { useAppStore } from '@/src/state/store';
 
 function AppBoot() {
-  const migratedToMvp2 = useAppStore((state) => state.migratedToMvp2);
+  const schemaVersion = useAppStore((state) => state.schemaVersion);
 
   useEffect(() => {
-    if (!migratedToMvp2) {
+    if (schemaVersion < MVP2_SCHEMA_VERSION) {
       runMvp2Migration(useAppStore.getState());
     }
-  }, [migratedToMvp2]);
+  }, [schemaVersion]);
 
   return null;
 }

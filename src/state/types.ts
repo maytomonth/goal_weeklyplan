@@ -97,11 +97,13 @@ export interface UiSlice {
   selectedPlanId: ID | null;
   carryInboxOpen: boolean;
   appliedCarryByPlanId: Record<ID, boolean>;
-  migratedToMvp2: boolean;
+  schemaVersion: number;
+  recentGoalIds: ID[];
   setSelectedPlanId: (planId: ID | null) => void;
   setCarryInboxOpen: (open: boolean) => void;
   markCarryApplied: (planId: ID) => void;
-  markMigratedToMvp2: () => void;
+  setSchemaVersion: (version: number) => void;
+  pushRecentGoal: (goalId: ID) => void;
 }
 
 export type AppStore = GoalsSlice &

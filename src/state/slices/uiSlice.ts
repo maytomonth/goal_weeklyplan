@@ -6,7 +6,8 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set) => (
   selectedPlanId: null,
   carryInboxOpen: false,
   appliedCarryByPlanId: {},
-  migratedToMvp2: false,
+  schemaVersion: 1,
+  recentGoalIds: [],
   setSelectedPlanId: (planId) => set({ selectedPlanId: planId }),
   setCarryInboxOpen: (open) => set({ carryInboxOpen: open }),
   markCarryApplied: (planId) =>
@@ -16,5 +17,10 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set) => (
         [planId]: true,
       },
     })),
-  markMigratedToMvp2: () => set({ migratedToMvp2: true }),
+  setSchemaVersion: (version) => set({ schemaVersion: version }),
+  pushRecentGoal: (goalId) =>
+    set((state) => {
+      const deduped = [goalId, ...state.recentGoalIds.filter((id) => id !== goalId)];
+      return { recentGoalIds: deduped.slice(0, 10) };
+    }),
 });

@@ -104,3 +104,27 @@
 1. `refactor(mvp2): update domain model and store for periodStart-goalId weekly plans`
 2. `refactor(mvp2): apply carry actions within same-goal next week plans`
 3. `feat(mvp2): add goal-based weekly plan hub and legacy migration`
+
+## 진행 현황 업데이트
+
+### Step 1 상태
+- 완료. 모델/스토어/셀렉터를 `periodStart × goalId` 기준으로 전환.
+- `Task.goalId`와 `Plan.goalId` 일치 강제 규칙 반영.
+
+### Step 2 상태
+- 완료. carry/review 서비스 로직을 same-goal next week 기준으로 고정.
+- `unique(reviewId, fromTaskId)` 재적용 방지 유지.
+
+### Step 3 상태
+- 완료(보완 반영).
+- UI:
+  - Plan 탭을 주차 허브 + Goal Picker + goal plan 카드/상세 구조로 정리
+  - Review 탭을 주차 허브 + 상태 배지 + Carry Inbox 연동 + next-week CTA 구조로 정리
+  - Carry Inbox 모달에 결정 입력 검증 + 저장 플로우 반영
+  - Goals 탭에 이번 주 플랜 배지 + 최근 8주 히스토리(완료율/리뷰요약/열기) 반영
+- 마이그레이션:
+  - `schemaVersion` 기반 1회 마이그레이션 반영
+  - goalId 없는 task를 Inbox goal/plan으로 재매핑
+  - 가능한 경우 goalId 그룹 단위로 v2 weekly plans로 재배치
+- QA 문서:
+  - `docs/QA_MVP2.md` 시나리오 9개로 확장

@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { formatWeekLabel } from '@/src/core/time/week';
+import { isBlank, isValidIsoDateInput, normalizeTitle } from '@/src/core/validation/form';
+import { useToast } from '@/src/components/toast/ToastProvider';
 import { useAppStore } from '@/src/state/store';
 
 export default function GoalsScreen() {
+  const { showToast } = useToast();
+
   const goals = useAppStore((state) => state.goals);
   const tasks = useAppStore((state) => state.tasks);
   const plans = useAppStore((state) => state.plans);
@@ -17,6 +21,7 @@ export default function GoalsScreen() {
   const [description, setDescription] = useState('');
   const [dueType, setDueType] = useState<'none' | 'date'>('none');
   const [dueDate, setDueDate] = useState('');
+  const [errors, setErrors] = useState<{ title?: string; dueDate?: string }>({});
 
   const activeGoals = useMemo(
     () => Object.values(goals).filter((goal) => goal.status === 'active'),
@@ -53,27 +58,48 @@ export default function GoalsScreen() {
     setDescription('');
     setDueType('none');
     setDueDate('');
+    setErrors({});
+  };
+
+  const validateForm = () => {
+    const nextErrors: { title?: string; dueDate?: string } = {};
+    const normalizedTitle = normalizeTitle(title);
+
+    if (isBlank(normalizedTitle)) {
+      nextErrors.title = '제목은 필수입니다.';
+    }
+
+    if (dueType === 'date' && !isValidIsoDateInput(dueDate)) {
+      nextErrors.dueDate = 'YYYY-MM-DD 형식의 유효한 날짜를 입력하세요.';
+    }
+
+    setErrors(nextErrors);
+    return { ok: Object.keys(nextErrors).length === 0, normalizedTitle };
   };
 
   const submit = () => {
-    if (!title.trim()) {
+    const { ok, normalizedTitle } = validateForm();
+    if (!ok) {
+      showToast('폼 오류를 확인하세요.', 'error');
       return;
     }
 
     if (selectedGoalId) {
       editGoal(selectedGoalId, {
-        title: title.trim(),
+        title: normalizedTitle,
         description,
         dueType,
         dueDate: dueType === 'date' ? dueDate : undefined,
       });
+      showToast('Goal을 수정했습니다.', 'success');
     } else {
       createGoal({
-        title: title.trim(),
+        title: normalizedTitle,
         description,
         dueType,
         dueDate: dueType === 'date' ? dueDate : undefined,
       });
+      showToast('Goal을 생성했습니다.', 'success');
     }
 
     resetForm();
@@ -90,6 +116,7 @@ export default function GoalsScreen() {
     setDescription(goal.description ?? '');
     setDueType(goal.dueType);
     setDueDate(goal.dueDate ?? '');
+    setErrors({});
   };
 
   return (
@@ -99,11 +126,13 @@ export default function GoalsScreen() {
       <View style={styles.formCard}>
         <Text style={styles.sectionTitle}>{selectedGoalId ? 'Edit Goal' : 'New Goal'}</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, errors.title ? styles.inputError : undefined]}
           placeholder="Goal title"
           value={title}
           onChangeText={setTitle}
         />
+        {errors.title ? <Text style={styles.errorText}>{errors.title}</Text> : null}
+
         <TextInput
           style={[styles.input, styles.multiline]}
           multiline
@@ -115,7 +144,10 @@ export default function GoalsScreen() {
         <View style={styles.row}>
           <Pressable
             style={[styles.chip, dueType === 'none' ? styles.chipSelected : undefined]}
-            onPress={() => setDueType('none')}
+            onPress={() => {
+              setDueType('none');
+              setErrors((prev) => ({ ...prev, dueDate: undefined }));
+            }}
           >
             <Text style={styles.chipText}>No Due</Text>
           </Pressable>
@@ -128,12 +160,15 @@ export default function GoalsScreen() {
         </View>
 
         {dueType === 'date' ? (
-          <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD"
-            value={dueDate}
-            onChangeText={setDueDate}
-          />
+          <>
+            <TextInput
+              style={[styles.input, errors.dueDate ? styles.inputError : undefined]}
+              placeholder="YYYY-MM-DD"
+              value={dueDate}
+              onChangeText={setDueDate}
+            />
+            {errors.dueDate ? <Text style={styles.errorText}>{errors.dueDate}</Text> : null}
+          </>
         ) : null}
 
         <View style={styles.row}>
@@ -160,7 +195,16 @@ export default function GoalsScreen() {
                 Due: {goal.dueType === 'date' ? goal.dueDate : 'none'} / Linked Tasks: {thisWeekLinkedCount}
               </Text>
             </Pressable>
-            <Pressable style={styles.archiveButton} onPress={() => archiveGoal(goal.id)}>
+            <Pressable
+              style={styles.archiveButton}
+              onPress={() => {
+                archiveGoal(goal.id);
+                showToast('Goal을 아카이브했습니다.', 'info');
+                if (selectedGoalId === goal.id) {
+                  resetForm();
+                }
+              }}
+            >
               <Text style={styles.archiveText}>Archive</Text>
             </Pressable>
           </View>
@@ -217,6 +261,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: '#fff',
   },
+  inputError: { borderColor: '#dc2626' },
+  errorText: { color: '#b91c1c', fontSize: 12 },
   multiline: { minHeight: 80, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   chip: {

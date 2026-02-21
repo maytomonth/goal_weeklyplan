@@ -1,15 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { useRouter } from 'expo-router';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { applyCarryActionsAndEnsureNextPlan } from '@/src/services/carryService';
 import { getWeekPeriod } from '@/src/core/time/week';
+import { useToast } from '@/src/components/toast/ToastProvider';
 import { selectPlanByPeriod, selectTasksByPlan } from '@/src/state/selectors/planSelectors';
 import { selectCarryDraft } from '@/src/state/selectors/reviewSelectors';
 import { useAppStore } from '@/src/state/store';
@@ -18,6 +12,7 @@ const ACTIONS = ['carry', 'split', 'drop', 'rescope'] as const;
 
 export default function CarryInboxModal() {
   const router = useRouter();
+  const { showToast } = useToast();
 
   const selectedWeekStartIso = useAppStore((state) => state.selectedWeekStartIso);
   const ensureWeekPlan = useAppStore((state) => state.ensureWeekPlan);
@@ -53,8 +48,32 @@ export default function CarryInboxModal() {
     setSelectedPlanId(planId);
   }, [ensureWeekPlan, periodEndIso, periodStartIso, setSelectedPlanId]);
 
+  const validateBeforeApply = () => {
+    for (const task of incompleteTasks) {
+      const decision = draft[task.id];
+
+      if (decision?.action === 'rescope' && !decision.rescopeTitle.trim()) {
+        showToast(`"${task.title}"의 Rescope 제목을 입력하세요.`, 'error');
+        return false;
+      }
+
+      if (decision?.action === 'split') {
+        const validChildren = decision.splitTitles.map((title) => title.trim()).filter(Boolean);
+        if (validChildren.length === 0) {
+          showToast(`"${task.title}"의 Split 하위 Task를 1개 이상 입력하세요.`, 'error');
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
   const applyAndClose = () => {
     if (!plan) {
+      return;
+    }
+
+    if (!validateBeforeApply()) {
       return;
     }
 
@@ -68,6 +87,7 @@ export default function CarryInboxModal() {
       setSelectedPlanId(nextPlanId);
     }
 
+    showToast('Carry 적용 후 다음 주 계획으로 이동합니다.', 'success');
     router.dismiss();
     router.replace('/plan');
   };
@@ -79,14 +99,23 @@ export default function CarryInboxModal() {
 
       <Pressable
         style={styles.ghostButton}
-        onPress={() => plan && bulkCarryUndecided(plan.id, incompleteTasks.map((task) => task.id))}
+        onPress={() => {
+          if (!plan) {
+            return;
+          }
+          bulkCarryUndecided(
+            plan.id,
+            incompleteTasks.map((task) => task.id),
+          );
+          showToast('미선택 항목을 carry로 지정했습니다.', 'info');
+        }}
       >
         <Text style={styles.ghostButtonText}>일괄 Carry (미선택만)</Text>
       </Pressable>
 
       {incompleteTasks.map((task) => {
         const decision = draft[task.id];
-        const splitTitles = decision?.splitTitles ?? [''];
+        const splitTitles = decision?.splitTitles?.length ? decision.splitTitles : [''];
 
         return (
           <View key={task.id} style={styles.card}>
@@ -116,12 +145,17 @@ export default function CarryInboxModal() {
             ) : null}
 
             {decision?.action === 'rescope' ? (
-              <TextInput
-                style={styles.input}
-                placeholder="더 작은 버전 제목 (필수)"
-                value={decision.rescopeTitle}
-                onChangeText={(text) => plan && setRescopeTitle(plan.id, task.id, text)}
-              />
+              <>
+                <TextInput
+                  style={[styles.input, !decision.rescopeTitle.trim() ? styles.inputWarning : undefined]}
+                  placeholder="더 작은 버전 제목 (필수)"
+                  value={decision.rescopeTitle}
+                  onChangeText={(text) => plan && setRescopeTitle(plan.id, task.id, text)}
+                />
+                {!decision.rescopeTitle.trim() ? (
+                  <Text style={styles.warningText}>Rescope 제목이 필요합니다.</Text>
+                ) : null}
+              </>
             ) : null}
 
             {decision?.action === 'split' ? (
@@ -142,6 +176,9 @@ export default function CarryInboxModal() {
                     }}
                   />
                 ))}
+                {splitTitles.map((title) => title.trim()).filter(Boolean).length === 0 ? (
+                  <Text style={styles.warningText}>Split 하위 Task를 1개 이상 입력하세요.</Text>
+                ) : null}
                 <Pressable
                   style={styles.smallButton}
                   onPress={() => plan && setSplitChildren(plan.id, task.id, [...splitTitles, ''])}
@@ -203,6 +240,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
+  inputWarning: { borderColor: '#f59e0b' },
+  warningText: { color: '#b45309', fontSize: 12 },
   splitWrap: { gap: 8 },
   smallButton: {
     alignSelf: 'flex-start',

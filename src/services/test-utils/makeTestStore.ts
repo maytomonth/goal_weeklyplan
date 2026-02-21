@@ -74,8 +74,8 @@ export function makeTestStore(seed: Seed = {}): AppStore {
       store.goals[goalId] = { ...goal, status: 'archived', updatedAt: nowIso() };
     },
 
-    ensureWeekPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
-      const resolvedGoalId = goalId ?? store.ensureInboxGoal();
+    ensureGoalWeeklyPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
+      const resolvedGoalId = goalId;
       const existing = Object.values(store.plans).find(
         (plan) => plan.type === 'week' && plan.periodStart === periodStartIso && plan.goalId === resolvedGoalId,
       );
@@ -95,6 +95,14 @@ export function makeTestStore(seed: Seed = {}): AppStore {
         updatedAt: ts,
       };
       return id;
+    },
+    getWeekPlan: (periodStartIso, goalId) =>
+      Object.values(store.plans).find(
+        (plan) => plan.type === 'week' && plan.periodStart === periodStartIso && plan.goalId === goalId,
+      ) ?? null,
+    ensureWeekPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
+      const resolvedGoalId = goalId ?? store.ensureInboxGoal();
+      return store.ensureGoalWeeklyPlan(periodStartIso, periodEndIso, resolvedGoalId, sourcePlanId);
     },
     updatePlanNote: (planId, note) => {
       const plan = store.plans[planId];

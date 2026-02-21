@@ -33,6 +33,7 @@ export type TaskStatus = 'todo' | 'done' | 'dropped';
 export interface Task {
   id: ID;
   planId: ID;
+  // Must always match the parent weekly plan's goalId.
   goalId: ID;
   title: string;
   status: TaskStatus;

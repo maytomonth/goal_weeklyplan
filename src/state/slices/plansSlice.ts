@@ -5,8 +5,8 @@ import { AppStore, PlansSlice } from '@/src/state/types';
 
 export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set, get) => ({
   plans: {},
-  ensureWeekPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
-    const resolvedGoalId = goalId ?? get().ensureInboxGoal();
+  ensureGoalWeeklyPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
+    const resolvedGoalId = goalId;
     const existing = Object.values(get().plans).find(
       (plan) =>
         plan.type === 'week' &&
@@ -42,6 +42,14 @@ export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set
     }));
 
     return id;
+  },
+  getWeekPlan: (periodStartIso, goalId) =>
+    Object.values(get().plans).find(
+      (plan) => plan.type === 'week' && plan.periodStart === periodStartIso && plan.goalId === goalId,
+    ) ?? null,
+  ensureWeekPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
+    const resolvedGoalId = goalId ?? get().ensureInboxGoal();
+    return get().ensureGoalWeeklyPlan(periodStartIso, periodEndIso, resolvedGoalId, sourcePlanId);
   },
   updatePlanNote: (planId, note) => {
     set((state) => {

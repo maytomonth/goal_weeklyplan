@@ -18,6 +18,10 @@ export function selectPlansByPeriod(state: AppStore, periodStartIso: string) {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
+export function selectWeeklyPlansForWeek(state: AppStore, periodStartIso: string) {
+  return selectPlansByPeriod(state, periodStartIso);
+}
+
 export function selectTasksByPlan(state: AppStore, planId: string) {
   return Object.values(state.tasks)
     .filter((task) => task.planId === planId)

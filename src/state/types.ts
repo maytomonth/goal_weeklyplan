@@ -31,6 +31,14 @@ export interface GoalsSlice {
 
 export interface PlansSlice {
   plans: PlansById;
+  ensureGoalWeeklyPlan: (
+    periodStartIso: string,
+    periodEndIso: string,
+    goalId: ID,
+    sourcePlanId?: ID,
+  ) => ID;
+  getWeekPlan: (periodStartIso: string, goalId: ID) => Plan | null;
+  // Backward-compatible alias. Prefer ensureGoalWeeklyPlan for MVP2.
   ensureWeekPlan: (
     periodStartIso: string,
     periodEndIso: string,

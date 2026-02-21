@@ -46,12 +46,15 @@
 ### Step 1: 모델/스토어 리팩터 (Commit 1)
 - `Plan` 타입에 `goalId: ID` 필수 추가
 - `Task.goalId`를 필수로 전환
-- `ensureWeekPlan` 시그니처 변경:
-  - `ensureWeekPlan(periodStartIso, periodEndIso, goalId, sourcePlanId?)`
+- plan store API 변경:
+  - `ensureGoalWeeklyPlan(periodStartIso, periodEndIso, goalId, sourcePlanId?)`
+  - `getWeekPlan(periodStartIso, goalId)`
   - 유니크 키: `(periodStart, goalId)`
+  - 하위 호환용 `ensureWeekPlan(...)` 래퍼 유지 (내부에서 `ensureGoalWeeklyPlan` 호출)
 - 선택자 추가/변경:
   - `selectPlanByPeriodAndGoal`
   - `selectPlansByPeriod`
+  - `selectWeeklyPlansForWeek(periodStartIso)`
   - `selectTasksByPlan`는 유지하되 goal 일관성 가드 반영
 - UI 상태에서 목표 단위 선택 보조 필드 추가:
   - `selectedGoalIdForWeekPlan` (필요 시)
@@ -60,6 +63,7 @@
 검증:
 - `npm run typecheck`
 - `npm test`
+- `npm run web` (boot 확인)
 
 ### Step 2: Carry 로직 목표 단위 전환 (Commit 2)
 - `applyCarryActionsAndEnsureNextPlan(planId)` 내부에서:

@@ -193,4 +193,30 @@ describe('applyCarryActionsAndEnsureNextPlan', () => {
     const carriedTask = Object.values(store.tasks).find((task) => task.planId === nextPlanId);
     expect(carriedTask?.goalId).toBe(plan.goalId);
   });
+
+  it('skips already applied carry action by reviewId+fromTaskId uniqueness', () => {
+    const { plan, tasks } = makeWeeklySeed();
+    const store = makeTestStore({ plans: [plan], tasks: [tasks[0], tasks[1]] });
+
+    const reviewId = store.ensureReview(plan.id);
+    store.createCarryAction({
+      reviewId,
+      fromTaskId: 't_carry',
+      action: 'carry',
+      toTaskIds: ['task_existing'],
+    });
+
+    store.setCarryDecision(plan.id, 't_carry', 'carry');
+    store.setCarryDecision(plan.id, 't_drop', 'carry');
+
+    const nextPlanId = applyCarryActionsAndEnsureNextPlan(store, plan.id);
+    const actions = Object.values(store.carryActions);
+
+    expect(actions.filter((entry) => entry.fromTaskId === 't_carry')).toHaveLength(1);
+    expect(actions.filter((entry) => entry.fromTaskId === 't_drop')).toHaveLength(1);
+
+    const nextTasks = Object.values(store.tasks).filter((task) => task.planId === nextPlanId);
+    expect(nextTasks).toHaveLength(1);
+    expect(nextTasks[0].carryFromTaskId).toBe('t_drop');
+  });
 });

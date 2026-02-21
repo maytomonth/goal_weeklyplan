@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Goal Tracker MVP1",
+    "slug": "goal-tracker-mvp1",
+    "scheme": "goaltracker",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

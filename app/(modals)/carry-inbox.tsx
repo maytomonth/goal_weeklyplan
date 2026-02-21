@@ -1,10 +1,9 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { applyCarryActionsAndEnsureNextPlan } from '@/src/services/carryService';
-import { getWeekPeriod } from '@/src/core/time/week';
 import { useToast } from '@/src/components/toast/ToastProvider';
-import { selectPlanByPeriod, selectTasksByPlan } from '@/src/state/selectors/planSelectors';
+import { selectTasksByPlan } from '@/src/state/selectors/planSelectors';
 import { selectCarryDraft } from '@/src/state/selectors/reviewSelectors';
 import { useAppStore } from '@/src/state/store';
 
@@ -14,8 +13,9 @@ export default function CarryInboxModal() {
   const router = useRouter();
   const { showToast } = useToast();
 
-  const selectedWeekStartIso = useAppStore((state) => state.selectedWeekStartIso);
-  const ensureWeekPlan = useAppStore((state) => state.ensureWeekPlan);
+  const selectedPlanId = useAppStore((state) => state.selectedPlanId);
+  const plans = useAppStore((state) => state.plans);
+  const goals = useAppStore((state) => state.goals);
   const setSelectedPlanId = useAppStore((state) => state.setSelectedPlanId);
   const setSelectedWeekStart = useAppStore((state) => state.setSelectedWeekStart);
 
@@ -25,28 +25,11 @@ export default function CarryInboxModal() {
   const setSplitChildren = useAppStore((state) => state.setSplitChildren);
   const bulkCarryUndecided = useAppStore((state) => state.bulkCarryUndecided);
 
-  const period = useMemo(() => {
-    if (selectedWeekStartIso) {
-      const start = new Date(selectedWeekStartIso);
-      const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
-      return { start, end };
-    }
-    return getWeekPeriod(new Date());
-  }, [selectedWeekStartIso]);
-
-  const periodStartIso = period.start.toISOString();
-  const periodEndIso = period.end.toISOString();
-
-  const plan = useAppStore((state) => selectPlanByPeriod(state, periodStartIso));
+  const plan = selectedPlanId ? plans[selectedPlanId] : null;
   const tasks = useAppStore((state) => (plan ? selectTasksByPlan(state, plan.id) : []));
   const draft = useAppStore((state) => (plan ? selectCarryDraft(state, plan.id) : {}));
 
-  const incompleteTasks = tasks.filter((task) => task.status === 'todo');
-
-  useEffect(() => {
-    const planId = ensureWeekPlan(periodStartIso, periodEndIso);
-    setSelectedPlanId(planId);
-  }, [ensureWeekPlan, periodEndIso, periodStartIso, setSelectedPlanId]);
+  const incompleteTasks = useMemo(() => tasks.filter((task) => task.status === 'todo'), [tasks]);
 
   const validateBeforeApply = () => {
     for (const task of incompleteTasks) {
@@ -87,22 +70,28 @@ export default function CarryInboxModal() {
       setSelectedPlanId(nextPlanId);
     }
 
-    showToast('Carry 적용 후 다음 주 계획으로 이동합니다.', 'success');
+    showToast('Carry 적용 후 다음 주 목표 플랜으로 이동합니다.', 'success');
     router.dismiss();
     router.replace('/plan');
   };
 
+  if (!plan) {
+    return (
+      <View style={[styles.container, styles.empty]}>
+        <Text style={styles.title}>Carry Inbox</Text>
+        <Text style={styles.subtitle}>선택된 목표 플랜이 없습니다. Review에서 플랜을 먼저 선택하세요.</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Carry Inbox</Text>
-      <Text style={styles.subtitle}>미완료 Task를 carry/split/drop/rescope로 결정하세요.</Text>
+      <Text style={styles.subtitle}>{goals[plan.goalId]?.title ?? 'Unknown'} · 미완료 Task 처리</Text>
 
       <Pressable
         style={styles.ghostButton}
         onPress={() => {
-          if (!plan) {
-            return;
-          }
           bulkCarryUndecided(
             plan.id,
             incompleteTasks.map((task) => task.id),
@@ -128,7 +117,7 @@ export default function CarryInboxModal() {
                     styles.actionChip,
                     decision?.action === action ? styles.actionChipSelected : undefined,
                   ]}
-                  onPress={() => plan && setCarryDecision(plan.id, task.id, action)}
+                  onPress={() => setCarryDecision(plan.id, task.id, action)}
                 >
                   <Text style={styles.actionText}>{action}</Text>
                 </Pressable>
@@ -140,7 +129,7 @@ export default function CarryInboxModal() {
                 style={styles.input}
                 placeholder="Drop 사유 (선택)"
                 value={decision.note}
-                onChangeText={(text) => plan && setDropNote(plan.id, task.id, text)}
+                onChangeText={(text) => setDropNote(plan.id, task.id, text)}
               />
             ) : null}
 
@@ -150,7 +139,7 @@ export default function CarryInboxModal() {
                   style={[styles.input, !decision.rescopeTitle.trim() ? styles.inputWarning : undefined]}
                   placeholder="더 작은 버전 제목 (필수)"
                   value={decision.rescopeTitle}
-                  onChangeText={(text) => plan && setRescopeTitle(plan.id, task.id, text)}
+                  onChangeText={(text) => setRescopeTitle(plan.id, task.id, text)}
                 />
                 {!decision.rescopeTitle.trim() ? (
                   <Text style={styles.warningText}>Rescope 제목이 필요합니다.</Text>
@@ -167,9 +156,6 @@ export default function CarryInboxModal() {
                     placeholder={`하위 Task ${idx + 1}`}
                     value={title}
                     onChangeText={(text) => {
-                      if (!plan) {
-                        return;
-                      }
                       const next = [...splitTitles];
                       next[idx] = text;
                       setSplitChildren(plan.id, task.id, next);
@@ -181,7 +167,7 @@ export default function CarryInboxModal() {
                 ) : null}
                 <Pressable
                   style={styles.smallButton}
-                  onPress={() => plan && setSplitChildren(plan.id, task.id, [...splitTitles, ''])}
+                  onPress={() => setSplitChildren(plan.id, task.id, [...splitTitles, ''])}
                 >
                   <Text style={styles.smallButtonText}>+ add subtask</Text>
                 </Pressable>
@@ -201,6 +187,7 @@ export default function CarryInboxModal() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   content: { padding: 16, gap: 12 },
+  empty: { padding: 16 },
   title: { fontSize: 22, fontWeight: '700' },
   subtitle: { color: '#475569' },
   ghostButton: {

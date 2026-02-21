@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { formatWeekLabel } from '@/src/core/time/week';
 import { isBlank, isValidIsoDateInput, normalizeTitle } from '@/src/core/validation/form';
@@ -6,15 +7,18 @@ import { useToast } from '@/src/components/toast/ToastProvider';
 import { useAppStore } from '@/src/state/store';
 
 export default function GoalsScreen() {
+  const router = useRouter();
   const { showToast } = useToast();
 
   const goals = useAppStore((state) => state.goals);
-  const tasks = useAppStore((state) => state.tasks);
   const plans = useAppStore((state) => state.plans);
+  const tasks = useAppStore((state) => state.tasks);
 
   const createGoal = useAppStore((state) => state.createGoal);
   const editGoal = useAppStore((state) => state.editGoal);
   const archiveGoal = useAppStore((state) => state.archiveGoal);
+  const setSelectedPlanId = useAppStore((state) => state.setSelectedPlanId);
+  const setSelectedWeekStart = useAppStore((state) => state.setSelectedWeekStart);
 
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -34,22 +38,22 @@ export default function GoalsScreen() {
 
   const selectedGoal = selectedGoalId ? goals[selectedGoalId] : null;
 
-  const linkedRecentTasks = useMemo(() => {
+  const weeklyPlanHistory = useMemo(() => {
     if (!selectedGoalId) {
       return [];
     }
 
-    const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
-    return Object.values(tasks)
-      .filter((task) => task.goalId === selectedGoalId)
-      .filter((task) => {
-        const plan = plans[task.planId];
-        if (!plan) {
-          return false;
-        }
-        return new Date(plan.periodStart).getTime() >= cutoff;
-      })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return Object.values(plans)
+      .filter((plan) => plan.goalId === selectedGoalId)
+      .sort((a, b) => b.periodStart.localeCompare(a.periodStart))
+      .slice(0, 8)
+      .map((plan) => {
+        const planTasks = Object.values(tasks).filter((task) => task.planId === plan.id);
+        const done = planTasks.filter((task) => task.status === 'done').length;
+        const denominator = planTasks.filter((task) => task.status !== 'dropped').length;
+        const completionRate = denominator === 0 ? 0 : done / denominator;
+        return { plan, completionRate };
+      });
   }, [plans, selectedGoalId, tasks]);
 
   const resetForm = () => {
@@ -119,6 +123,12 @@ export default function GoalsScreen() {
     setErrors({});
   };
 
+  const openWeeklyPlan = (planId: string, weekStartIso: string) => {
+    setSelectedPlanId(planId);
+    setSelectedWeekStart(weekStartIso);
+    router.push('/plan');
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Goals</Text>
@@ -185,14 +195,14 @@ export default function GoalsScreen() {
 
       <Text style={styles.sectionTitle}>Active</Text>
       {activeGoals.map((goal) => {
-        const thisWeekLinkedCount = Object.values(tasks).filter((task) => task.goalId === goal.id).length;
+        const goalPlans = Object.values(plans).filter((plan) => plan.goalId === goal.id);
         return (
           <View key={goal.id} style={styles.goalCard}>
             <Pressable onPress={() => selectGoal(goal.id)}>
               <Text style={styles.goalTitle}>{goal.title}</Text>
               <Text style={styles.muted}>{goal.description || '-'}</Text>
               <Text style={styles.muted}>
-                Due: {goal.dueType === 'date' ? goal.dueDate : 'none'} / Linked Tasks: {thisWeekLinkedCount}
+                Due: {goal.dueType === 'date' ? goal.dueDate : 'none'} / WeeklyPlans: {goalPlans.length}
               </Text>
             </Pressable>
             <Pressable
@@ -214,17 +224,21 @@ export default function GoalsScreen() {
 
       {selectedGoal ? (
         <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Linked Tasks (최근 4주)</Text>
-          {linkedRecentTasks.map((task) => {
-            const plan = plans[task.planId];
-            const week = plan ? formatWeekLabel(new Date(plan.periodStart)) : '-';
-            return (
-              <Text key={task.id} style={styles.muted}>
-                {task.title} · {week} · {task.status}
+          <Text style={styles.sectionTitle}>WeeklyPlan History (최근 8주)</Text>
+          {weeklyPlanHistory.map(({ plan, completionRate }) => (
+            <Pressable
+              key={plan.id}
+              style={styles.historyCard}
+              onPress={() => openWeeklyPlan(plan.id, plan.periodStart)}
+            >
+              <Text style={styles.historyTitle}>{formatWeekLabel(new Date(plan.periodStart))}</Text>
+              <Text style={styles.muted}>완료율 {(completionRate * 100).toFixed(0)}%</Text>
+              <Text style={styles.muted} numberOfLines={1}>
+                {plan.note || '노트 없음'}
               </Text>
-            );
-          })}
-          {linkedRecentTasks.length === 0 ? <Text style={styles.muted}>최근 연결 Task 없음</Text> : null}
+            </Pressable>
+          ))}
+          {weeklyPlanHistory.length === 0 ? <Text style={styles.muted}>주간 플랜 히스토리 없음</Text> : null}
         </View>
       ) : null}
 
@@ -297,6 +311,15 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 6,
   },
+  historyCard: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    gap: 4,
+  },
+  historyTitle: { fontWeight: '700', color: '#334155' },
   goalTitle: { fontWeight: '700', fontSize: 15 },
   muted: { color: '#6b7280' },
   archiveButton: {

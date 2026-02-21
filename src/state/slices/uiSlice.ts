@@ -6,6 +6,7 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set) => (
   selectedPlanId: null,
   carryInboxOpen: false,
   appliedCarryByPlanId: {},
+  migratedToMvp2: false,
   setSelectedPlanId: (planId) => set({ selectedPlanId: planId }),
   setCarryInboxOpen: (open) => set({ carryInboxOpen: open }),
   markCarryApplied: (planId) =>
@@ -15,4 +16,5 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set) => (
         [planId]: true,
       },
     })),
+  markMigratedToMvp2: () => set({ migratedToMvp2: true }),
 });

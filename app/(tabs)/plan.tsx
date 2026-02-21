@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { formatWeekLabel, getWeekPeriod } from '@/src/core/time/week';
 import { isBlank, normalizeTitle } from '@/src/core/validation/form';
 import { Task } from '@/src/core/types/domain';
 import { useToast } from '@/src/components/toast/ToastProvider';
-import { selectPlanByPeriod, selectTasksByPlan } from '@/src/state/selectors/planSelectors';
+import { selectPlansByPeriod, selectTasksByPlan } from '@/src/state/selectors/planSelectors';
 import { useAppStore } from '@/src/state/store';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default function PlanScreen() {
+  const router = useRouter();
   const { showToast } = useToast();
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
   const selectedWeekStartIso = useAppStore((state) => state.selectedWeekStartIso);
+  const selectedPlanId = useAppStore((state) => state.selectedPlanId);
   const setSelectedWeekStart = useAppStore((state) => state.setSelectedWeekStart);
   const setSelectedPlanId = useAppStore((state) => state.setSelectedPlanId);
   const ensureWeekPlan = useAppStore((state) => state.ensureWeekPlan);
@@ -24,7 +27,10 @@ export default function PlanScreen() {
   const updateTask = useAppStore((state) => state.updateTask);
   const toggleTaskDone = useAppStore((state) => state.toggleTaskDone);
   const reorderTask = useAppStore((state) => state.reorderTask);
+
   const goals = useAppStore((state) => state.goals);
+  const plansById = useAppStore((state) => state.plans);
+  const allTasks = useAppStore((state) => state.tasks);
 
   const period = useMemo(() => {
     if (selectedWeekStartIso) {
@@ -38,27 +44,41 @@ export default function PlanScreen() {
   const periodStartIso = period.start.toISOString();
   const periodEndIso = period.end.toISOString();
 
-  const plan = useAppStore((state) => selectPlanByPeriod(state, periodStartIso));
-  const tasks = useAppStore((state) => (plan ? selectTasksByPlan(state, plan.id) : []));
+  useEffect(() => {
+    setSelectedWeekStart(periodStartIso);
+  }, [periodStartIso, setSelectedWeekStart]);
+
+  const plans = useAppStore((state) => selectPlansByPeriod(state, periodStartIso));
+
+  useEffect(() => {
+    if (!plans.some((plan) => plan.id === selectedPlanId)) {
+      setSelectedPlanId(plans[0]?.id ?? null);
+    }
+  }, [plans, selectedPlanId, setSelectedPlanId]);
+
+  const selectedPlan = selectedPlanId ? plansById[selectedPlanId] : null;
+  const tasks = useAppStore((state) => (selectedPlan ? selectTasksByPlan(state, selectedPlan.id) : []));
 
   const activeGoals = useMemo(
     () => Object.values(goals).filter((goal) => goal.status === 'active'),
     [goals],
   );
 
-  useEffect(() => {
-    const planId = ensureWeekPlan(periodStartIso, periodEndIso);
-    setSelectedWeekStart(periodStartIso);
+  const createOrOpenGoalPlan = (goalId: string) => {
+    const planId = ensureWeekPlan(periodStartIso, periodEndIso, goalId);
     setSelectedPlanId(planId);
-  }, [ensureWeekPlan, periodEndIso, periodStartIso, setSelectedPlanId, setSelectedWeekStart]);
+    showToast('목표 플랜을 열었습니다.', 'success');
+  };
 
   const moveWeek = (direction: -1 | 1) => {
     const nextStart = new Date(period.start.getTime() + direction * 7 * DAY_MS);
     setSelectedWeekStart(nextStart.toISOString());
+    setSelectedPlanId(null);
   };
 
   const submitTask = () => {
-    if (!plan) {
+    if (!selectedPlan) {
+      showToast('먼저 목표 플랜을 선택하세요.', 'error');
       return;
     }
 
@@ -69,19 +89,20 @@ export default function PlanScreen() {
     }
 
     addTask({
-      planId: plan.id,
+      planId: selectedPlan.id,
       title,
+      goalId: selectedPlan.goalId,
     });
     setNewTaskTitle('');
     showToast('Task를 추가했습니다.', 'success');
   };
 
   const onToggleTop3 = (taskId: string) => {
-    if (!plan) {
+    if (!selectedPlan) {
       return;
     }
 
-    const result = toggleTop3(plan.id, taskId);
+    const result = toggleTop3(selectedPlan.id, taskId);
     if (!result.ok) {
       showToast('Top 3는 최대 3개까지 가능합니다.', 'error');
     }
@@ -123,30 +144,11 @@ export default function PlanScreen() {
             <Text style={styles.ghostButtonText}>Top3</Text>
           </Pressable>
         </View>
-
-        <Text style={styles.goalLabel}>Goal 연결</Text>
-        <View style={styles.goalWrap}>
-          <Pressable
-            style={[styles.goalChip, !item.goalId ? styles.goalChipSelected : undefined]}
-            onPress={() => updateTask(item.id, { goalId: undefined })}
-          >
-            <Text style={styles.goalChipText}>No Goal</Text>
-          </Pressable>
-          {activeGoals.map((goal) => (
-            <Pressable
-              key={goal.id}
-              style={[styles.goalChip, item.goalId === goal.id ? styles.goalChipSelected : undefined]}
-              onPress={() => updateTask(item.id, { goalId: goal.id })}
-            >
-              <Text style={styles.goalChipText}>{goal.title}</Text>
-            </Pressable>
-          ))}
-        </View>
       </View>
     </ScaleDecorator>
   );
 
-  const renderHeader = (
+  const renderPlanHub = (
     <View style={styles.headerBlock}>
       <View style={styles.headerRow}>
         <Pressable style={styles.weekButton} onPress={() => moveWeek(-1)}>
@@ -158,62 +160,105 @@ export default function PlanScreen() {
         </Pressable>
       </View>
 
-      <Text style={styles.sectionTitle}>Plan Note</Text>
-      <TextInput
-        multiline
-        placeholder="이번 주 의도/전략/주의점..."
-        value={plan?.note ?? ''}
-        onChangeText={(text) => plan && updatePlanNote(plan.id, text)}
-        style={styles.noteInput}
-      />
-
-      <Text style={styles.sectionTitle}>Top 3</Text>
-      <View style={styles.top3Wrap}>
-        {(plan?.top3TaskIds ?? []).map((taskId) => {
-          const topTask = tasks.find((task) => task.id === taskId);
-          if (!topTask) {
-            return null;
-          }
-          return (
-            <View key={taskId} style={styles.top3Badge}>
-              <Text style={styles.top3Text}>{topTask.title}</Text>
-            </View>
-          );
-        })}
-        {(plan?.top3TaskIds ?? []).length === 0 ? <Text style={styles.muted}>아직 없음</Text> : null}
+      <Text style={styles.sectionTitle}>이번 주 목표 플랜</Text>
+      <View style={styles.goalCreateWrap}>
+        {activeGoals.map((goal) => (
+          <Pressable key={goal.id} style={styles.goalCreateChip} onPress={() => createOrOpenGoalPlan(goal.id)}>
+            <Text style={styles.goalCreateChipText}>+ {goal.title}</Text>
+          </Pressable>
+        ))}
       </View>
 
-      <Text style={styles.sectionTitle}>Tasks</Text>
-      <View style={styles.addRow}>
-        <TextInput
-          style={styles.addInput}
-          placeholder="새 Task"
-          value={newTaskTitle}
-          onChangeText={setNewTaskTitle}
-          onSubmitEditing={submitTask}
-        />
-        <Pressable style={styles.primaryButton} onPress={submitTask}>
-          <Text style={styles.primaryButtonText}>Add</Text>
-        </Pressable>
-      </View>
+      {plans.length === 0 ? <Text style={styles.muted}>이번 주 목표 플랜이 없습니다. 위에서 목표를 선택하세요.</Text> : null}
 
-      {tasks.length === 0 ? <Text style={styles.muted}>할 일을 추가해보세요.</Text> : null}
-      <Text style={styles.hint}>
-        {Platform.OS === 'web'
-          ? '웹에서는 Up/Down 버튼으로 정렬하세요.'
-          : 'Task 우측 핸들을 길게 눌러 드래그 정렬하세요.'}
-      </Text>
+      {plans.map((plan) => {
+        const goal = goals[plan.goalId];
+        const planTasks = Object.values(allTasks).filter((task) => task.planId === plan.id);
+        const done = planTasks.filter((task) => task.status === 'done').length;
+        const todo = planTasks.filter((task) => task.status === 'todo').length;
+        const denominator = planTasks.filter((task) => task.status !== 'dropped').length;
+        const completion = denominator === 0 ? 0 : done / denominator;
+
+        return (
+          <Pressable
+            key={plan.id}
+            style={[styles.planCard, selectedPlan?.id === plan.id ? styles.planCardActive : undefined]}
+            onPress={() => setSelectedPlanId(plan.id)}
+          >
+            <Text style={styles.planCardTitle}>{goal?.title ?? 'Unknown Goal'}</Text>
+            <Text style={styles.muted}>완료율 {(completion * 100).toFixed(0)}% · 남은 {todo}개</Text>
+            <Text style={styles.muted}>Top3 {(plan.top3TaskIds ?? []).length}개</Text>
+          </Pressable>
+        );
+      })}
+
+      {selectedPlan ? (
+        <>
+          <View style={styles.detailHeaderRow}>
+            <Text style={styles.sectionTitle}>Plan Detail · {goals[selectedPlan.goalId]?.title ?? 'Unknown'}</Text>
+            <Pressable style={styles.reviewButton} onPress={() => router.push('/review')}>
+              <Text style={styles.reviewButtonText}>Review</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.sectionTitle}>Plan Note</Text>
+          <TextInput
+            multiline
+            placeholder="이번 주 의도/전략/주의점..."
+            value={selectedPlan.note ?? ''}
+            onChangeText={(text) => updatePlanNote(selectedPlan.id, text)}
+            style={styles.noteInput}
+          />
+
+          <Text style={styles.sectionTitle}>Top 3</Text>
+          <View style={styles.top3Wrap}>
+            {(selectedPlan.top3TaskIds ?? []).map((taskId) => {
+              const topTask = tasks.find((task) => task.id === taskId);
+              if (!topTask) {
+                return null;
+              }
+              return (
+                <View key={taskId} style={styles.top3Badge}>
+                  <Text style={styles.top3Text}>{topTask.title}</Text>
+                </View>
+              );
+            })}
+            {(selectedPlan.top3TaskIds ?? []).length === 0 ? <Text style={styles.muted}>아직 없음</Text> : null}
+          </View>
+
+          <Text style={styles.sectionTitle}>Tasks</Text>
+          <View style={styles.addRow}>
+            <TextInput
+              style={styles.addInput}
+              placeholder="새 Task"
+              value={newTaskTitle}
+              onChangeText={setNewTaskTitle}
+              onSubmitEditing={submitTask}
+            />
+            <Pressable style={styles.primaryButton} onPress={submitTask}>
+              <Text style={styles.primaryButtonText}>Add</Text>
+            </Pressable>
+          </View>
+
+          {tasks.length === 0 ? <Text style={styles.muted}>할 일을 추가해보세요.</Text> : null}
+          <Text style={styles.hint}>
+            {Platform.OS === 'web'
+              ? '웹에서는 Up/Down 버튼으로 정렬하세요.'
+              : 'Task 우측 핸들을 길게 눌러 드래그 정렬하세요.'}
+          </Text>
+        </>
+      ) : null}
     </View>
   );
 
-  if (Platform.OS === 'web') {
+  if (!selectedPlan || Platform.OS === 'web') {
     return (
       <FlatList
         style={styles.container}
         contentContainerStyle={styles.content}
-        data={tasks}
+        data={selectedPlan ? tasks : []}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderPlanHub}
         renderItem={({ item, index }) => (
           <View style={styles.taskCard}>
             <View style={styles.taskRow}>
@@ -231,13 +276,13 @@ export default function PlanScreen() {
               <Pressable
                 style={styles.ghostButton}
                 onPress={() => {
-                  if (!plan) return;
+                  if (!selectedPlan) return;
                   const ordered = tasks.map((task) => task.id);
                   const next = index - 1;
                   if (next < 0) return;
                   const [picked] = ordered.splice(index, 1);
                   ordered.splice(next, 0, picked);
-                  reorderTask(plan.id, ordered);
+                  reorderTask(selectedPlan.id, ordered);
                 }}
               >
                 <Text style={styles.ghostButtonText}>Up</Text>
@@ -245,13 +290,13 @@ export default function PlanScreen() {
               <Pressable
                 style={styles.ghostButton}
                 onPress={() => {
-                  if (!plan) return;
+                  if (!selectedPlan) return;
                   const ordered = tasks.map((task) => task.id);
                   const next = index + 1;
                   if (next >= ordered.length) return;
                   const [picked] = ordered.splice(index, 1);
                   ordered.splice(next, 0, picked);
-                  reorderTask(plan.id, ordered);
+                  reorderTask(selectedPlan.id, ordered);
                 }}
               >
                 <Text style={styles.ghostButtonText}>Down</Text>
@@ -275,14 +320,11 @@ export default function PlanScreen() {
       keyExtractor={(item) => item.id}
       renderItem={renderTaskItem}
       onDragEnd={({ data }) => {
-        if (!plan) {
-          return;
-        }
-        reorderTask(plan.id, data.map((task) => task.id));
+        reorderTask(selectedPlan.id, data.map((task) => task.id));
         showToast('Task 순서를 변경했습니다.', 'success');
       }}
       activationDistance={8}
-      ListHeaderComponent={renderHeader}
+      ListHeaderComponent={renderPlanHub}
       ListFooterComponent={<View style={{ height: 12 }} />}
     />
   );
@@ -297,6 +339,34 @@ const styles = StyleSheet.create({
   weekButton: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   weekButtonText: { color: 'white', fontWeight: '600' },
   sectionTitle: { fontWeight: '700', fontSize: 16, marginTop: 4 },
+  goalCreateWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  goalCreateChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#0f766e',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#ecfeff',
+  },
+  goalCreateChipText: { color: '#0f766e', fontWeight: '700' },
+  planCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    padding: 10,
+    backgroundColor: '#fff',
+    gap: 4,
+  },
+  planCardActive: { borderColor: '#0f766e', backgroundColor: '#f0fdfa' },
+  planCardTitle: { fontWeight: '700', fontSize: 15 },
+  detailHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reviewButton: {
+    borderRadius: 8,
+    backgroundColor: '#1f2937',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  reviewButtonText: { color: '#fff', fontWeight: '700' },
   noteInput: {
     minHeight: 110,
     borderRadius: 12,
@@ -369,15 +439,4 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   ghostButtonText: { color: '#334155', fontWeight: '600' },
-  goalLabel: { fontSize: 12, color: '#4b5563' },
-  goalWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  goalChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-  },
-  goalChipSelected: { backgroundColor: '#dcfce7', borderColor: '#16a34a' },
-  goalChipText: { color: '#334155', fontSize: 12 },
 });

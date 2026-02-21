@@ -163,4 +163,34 @@ describe('applyCarryActionsAndEnsureNextPlan', () => {
       'Split requires at least one child task for task: t_split',
     );
   });
+
+  it('creates/uses next weekly plan only for the same goalId', () => {
+    const { plan, tasks } = makeWeeklySeed();
+    const nextPeriodStart = '2026-03-01T15:00:00.000Z';
+    const nextPeriodEnd = '2026-03-08T15:00:00.000Z';
+
+    const otherGoalNextPlan: Plan = {
+      id: 'plan_other_goal_next',
+      type: 'week',
+      periodStart: nextPeriodStart,
+      periodEnd: nextPeriodEnd,
+      goalId: 'goal_b',
+      note: '',
+      top3TaskIds: [],
+      createdAt: nextPeriodStart,
+      updatedAt: nextPeriodStart,
+    };
+
+    const store = makeTestStore({ plans: [plan, otherGoalNextPlan], tasks: [tasks[0]] });
+    store.setCarryDecision(plan.id, 't_carry', 'carry');
+
+    const nextPlanId = applyCarryActionsAndEnsureNextPlan(store, plan.id);
+    expect(nextPlanId).not.toBe(otherGoalNextPlan.id);
+
+    const nextPlan = store.plans[nextPlanId];
+    expect(nextPlan.goalId).toBe(plan.goalId);
+
+    const carriedTask = Object.values(store.tasks).find((task) => task.planId === nextPlanId);
+    expect(carriedTask?.goalId).toBe(plan.goalId);
+  });
 });

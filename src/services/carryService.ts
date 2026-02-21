@@ -22,18 +22,28 @@ export function applyCarryActionsAndEnsureNextPlan(
   if (!plan) {
     throw new Error('Plan not found');
   }
+  const sourceGoalId = plan.goalId;
 
   if (store.appliedCarryByPlanId[planId]) {
     const nextPeriod = getNextWeekPeriodFromStart(new Date(plan.periodStart));
-    return store.ensureWeekPlan(nextPeriod.start.toISOString(), nextPeriod.end.toISOString(), planId);
+    return store.ensureWeekPlan(nextPeriod.start.toISOString(), nextPeriod.end.toISOString(), sourceGoalId, planId);
   }
 
   const nextPeriod = getNextWeekPeriodFromStart(new Date(plan.periodStart));
-  const nextPlanId = store.ensureWeekPlan(nextPeriod.start.toISOString(), nextPeriod.end.toISOString(), planId);
+  const nextPlanId = store.ensureWeekPlan(
+    nextPeriod.start.toISOString(),
+    nextPeriod.end.toISOString(),
+    sourceGoalId,
+    planId,
+  );
   const reviewId = store.ensureReview(planId);
+  const nextPlan = store.plans[nextPlanId];
+  if (!nextPlan) {
+    throw new Error('Failed to resolve next week plan');
+  }
 
   const todos = Object.values(store.tasks)
-    .filter((task) => task.planId === planId)
+    .filter((task) => task.planId === planId && task.goalId === sourceGoalId)
     .filter((task) => task.status === 'todo')
     .sort((a, b) => a.order - b.order);
 
@@ -60,7 +70,7 @@ export function applyCarryActionsAndEnsureNextPlan(
       const nextTaskId = store.addTask({
         planId: nextPlanId,
         title: task.title,
-        goalId: task.goalId,
+        goalId: nextPlan.goalId,
         carryFromTaskId: task.id,
       });
       toTaskIds = [nextTaskId];
@@ -81,7 +91,7 @@ export function applyCarryActionsAndEnsureNextPlan(
       const nextTaskId = store.addTask({
         planId: nextPlanId,
         title,
-        goalId: task.goalId,
+        goalId: nextPlan.goalId,
         carryFromTaskId: task.id,
       });
       toTaskIds = [nextTaskId];
@@ -98,7 +108,7 @@ export function applyCarryActionsAndEnsureNextPlan(
         store.addTask({
           planId: nextPlanId,
           title,
-          goalId: task.goalId,
+          goalId: nextPlan.goalId,
           carryFromTaskId: task.id,
           splitParentTaskId: task.id,
         }),

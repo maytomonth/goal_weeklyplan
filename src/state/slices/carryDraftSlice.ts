@@ -1,4 +1,4 @@
-import { StateCreator } from 'zustand';
+import type { StateCreator } from 'zustand';
 import { AppStore, CarryDraftSlice } from '@/src/state/types';
 
 function ensureDraft(state: AppStore, planId: string, taskId: string) {

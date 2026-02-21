@@ -1,4 +1,4 @@
-import { StateCreator } from 'zustand';
+import type { StateCreator } from 'zustand';
 import { nowIso } from '@/src/core/time/week';
 import { createId } from '@/src/state/helpers';
 import { AppStore, PlansSlice } from '@/src/state/types';

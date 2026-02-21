@@ -1,5 +1,10 @@
-import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+const { create } = require('zustand') as {
+  create: typeof import('zustand')['create'];
+};
+const { createJSONStorage, persist } = require('zustand/middleware') as {
+  createJSONStorage: typeof import('zustand/middleware')['createJSONStorage'];
+  persist: typeof import('zustand/middleware')['persist'];
+};
 import { appStorage } from '@/src/state/storage';
 import { createGoalsSlice } from '@/src/state/slices/goalsSlice';
 import { createPlansSlice } from '@/src/state/slices/plansSlice';

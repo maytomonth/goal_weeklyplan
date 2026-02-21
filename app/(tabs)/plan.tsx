@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { formatWeekLabel, getWeekPeriod } from '@/src/core/time/week';
 import { isBlank, normalizeTitle } from '@/src/core/validation/form';
@@ -146,6 +146,127 @@ export default function PlanScreen() {
     </ScaleDecorator>
   );
 
+  const renderHeader = (
+    <View style={styles.headerBlock}>
+      <View style={styles.headerRow}>
+        <Pressable style={styles.weekButton} onPress={() => moveWeek(-1)}>
+          <Text style={styles.weekButtonText}>Prev</Text>
+        </Pressable>
+        <Text style={styles.weekLabel}>{formatWeekLabel(period.start)}</Text>
+        <Pressable style={styles.weekButton} onPress={() => moveWeek(1)}>
+          <Text style={styles.weekButtonText}>Next</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.sectionTitle}>Plan Note</Text>
+      <TextInput
+        multiline
+        placeholder="이번 주 의도/전략/주의점..."
+        value={plan?.note ?? ''}
+        onChangeText={(text) => plan && updatePlanNote(plan.id, text)}
+        style={styles.noteInput}
+      />
+
+      <Text style={styles.sectionTitle}>Top 3</Text>
+      <View style={styles.top3Wrap}>
+        {(plan?.top3TaskIds ?? []).map((taskId) => {
+          const topTask = tasks.find((task) => task.id === taskId);
+          if (!topTask) {
+            return null;
+          }
+          return (
+            <View key={taskId} style={styles.top3Badge}>
+              <Text style={styles.top3Text}>{topTask.title}</Text>
+            </View>
+          );
+        })}
+        {(plan?.top3TaskIds ?? []).length === 0 ? <Text style={styles.muted}>아직 없음</Text> : null}
+      </View>
+
+      <Text style={styles.sectionTitle}>Tasks</Text>
+      <View style={styles.addRow}>
+        <TextInput
+          style={styles.addInput}
+          placeholder="새 Task"
+          value={newTaskTitle}
+          onChangeText={setNewTaskTitle}
+          onSubmitEditing={submitTask}
+        />
+        <Pressable style={styles.primaryButton} onPress={submitTask}>
+          <Text style={styles.primaryButtonText}>Add</Text>
+        </Pressable>
+      </View>
+
+      {tasks.length === 0 ? <Text style={styles.muted}>할 일을 추가해보세요.</Text> : null}
+      <Text style={styles.hint}>
+        {Platform.OS === 'web'
+          ? '웹에서는 Up/Down 버튼으로 정렬하세요.'
+          : 'Task 우측 핸들을 길게 눌러 드래그 정렬하세요.'}
+      </Text>
+    </View>
+  );
+
+  if (Platform.OS === 'web') {
+    return (
+      <FlatList
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        data={tasks}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderHeader}
+        renderItem={({ item, index }) => (
+          <View style={styles.taskCard}>
+            <View style={styles.taskRow}>
+              <Pressable style={styles.checkbox} onPress={() => toggleTaskDone(item.id)}>
+                <Text style={styles.checkboxText}>{item.status === 'done' ? '✓' : ''}</Text>
+              </Pressable>
+              <TextInput
+                style={styles.taskInput}
+                value={item.title}
+                onChangeText={(text) => updateTask(item.id, { title: text })}
+                onBlur={() => onTaskTitleBlur(item.id, item.title)}
+              />
+            </View>
+            <View style={styles.taskActions}>
+              <Pressable
+                style={styles.ghostButton}
+                onPress={() => {
+                  if (!plan) return;
+                  const ordered = tasks.map((task) => task.id);
+                  const next = index - 1;
+                  if (next < 0) return;
+                  const [picked] = ordered.splice(index, 1);
+                  ordered.splice(next, 0, picked);
+                  reorderTask(plan.id, ordered);
+                }}
+              >
+                <Text style={styles.ghostButtonText}>Up</Text>
+              </Pressable>
+              <Pressable
+                style={styles.ghostButton}
+                onPress={() => {
+                  if (!plan) return;
+                  const ordered = tasks.map((task) => task.id);
+                  const next = index + 1;
+                  if (next >= ordered.length) return;
+                  const [picked] = ordered.splice(index, 1);
+                  ordered.splice(next, 0, picked);
+                  reorderTask(plan.id, ordered);
+                }}
+              >
+                <Text style={styles.ghostButtonText}>Down</Text>
+              </Pressable>
+              <Pressable style={styles.ghostButton} onPress={() => onToggleTop3(item.id)}>
+                <Text style={styles.ghostButtonText}>Top3</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+        ListFooterComponent={<View style={{ height: 12 }} />}
+      />
+    );
+  }
+
   return (
     <DraggableFlatList
       style={styles.container}
@@ -161,61 +282,7 @@ export default function PlanScreen() {
         showToast('Task 순서를 변경했습니다.', 'success');
       }}
       activationDistance={8}
-      ListHeaderComponent={
-        <View style={styles.headerBlock}>
-          <View style={styles.headerRow}>
-            <Pressable style={styles.weekButton} onPress={() => moveWeek(-1)}>
-              <Text style={styles.weekButtonText}>Prev</Text>
-            </Pressable>
-            <Text style={styles.weekLabel}>{formatWeekLabel(period.start)}</Text>
-            <Pressable style={styles.weekButton} onPress={() => moveWeek(1)}>
-              <Text style={styles.weekButtonText}>Next</Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.sectionTitle}>Plan Note</Text>
-          <TextInput
-            multiline
-            placeholder="이번 주 의도/전략/주의점..."
-            value={plan?.note ?? ''}
-            onChangeText={(text) => plan && updatePlanNote(plan.id, text)}
-            style={styles.noteInput}
-          />
-
-          <Text style={styles.sectionTitle}>Top 3</Text>
-          <View style={styles.top3Wrap}>
-            {(plan?.top3TaskIds ?? []).map((taskId) => {
-              const topTask = tasks.find((task) => task.id === taskId);
-              if (!topTask) {
-                return null;
-              }
-              return (
-                <View key={taskId} style={styles.top3Badge}>
-                  <Text style={styles.top3Text}>{topTask.title}</Text>
-                </View>
-              );
-            })}
-            {(plan?.top3TaskIds ?? []).length === 0 ? <Text style={styles.muted}>아직 없음</Text> : null}
-          </View>
-
-          <Text style={styles.sectionTitle}>Tasks</Text>
-          <View style={styles.addRow}>
-            <TextInput
-              style={styles.addInput}
-              placeholder="새 Task"
-              value={newTaskTitle}
-              onChangeText={setNewTaskTitle}
-              onSubmitEditing={submitTask}
-            />
-            <Pressable style={styles.primaryButton} onPress={submitTask}>
-              <Text style={styles.primaryButtonText}>Add</Text>
-            </Pressable>
-          </View>
-
-          {tasks.length === 0 ? <Text style={styles.muted}>할 일을 추가해보세요.</Text> : null}
-          <Text style={styles.hint}>Task 우측 핸들을 길게 눌러 드래그 정렬하세요.</Text>
-        </View>
-      }
+      ListHeaderComponent={renderHeader}
       ListFooterComponent={<View style={{ height: 12 }} />}
     />
   );

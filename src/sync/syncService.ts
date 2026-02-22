@@ -35,8 +35,9 @@ function fingerprintState(): string {
 
 function hasLocalDomainData(): boolean {
   const state = useAppStore.getState();
+  const nonSystemGoalCount = Object.values(state.goals).filter((goal) => goal.systemType !== 'inbox').length;
   return (
-    Object.keys(state.goals).length > 0 ||
+    nonSystemGoalCount > 0 ||
     Object.keys(state.plans).length > 0 ||
     Object.keys(state.tasks).length > 0 ||
     Object.keys(state.reviews).length > 0 ||

@@ -30,41 +30,44 @@ Expected: 세션 종료 + `/sign-in` 이동
 4. 미로그인 상태에서 `/plan`, `/review`, `/goals`, `/inbox` 직접 접근
 Expected: `/sign-in`으로 강제 리다이렉트
 
+5. 모바일 폭(<1024)에서 Goals/Inbox 화면의 로그아웃 버튼 동작
+Expected: 세션 종료 + `/sign-in` 이동
+
 ### B. 동기화
-5. 로그인 직후 로컬 데이터가 있을 때 원격으로 업서트된다.
+6. 로그인 직후 로컬 데이터가 있을 때 원격으로 업서트된다.
 Expected: Supabase 테이블에 동일 데이터 반영
 
-6. 새 기기/로컬 비어있는 상태에서 로그인
+7. 새 기기/로컬 비어있는 상태에서 로그인
 Expected: 원격 데이터를 pull해 로컬에 복원
 
-7. 로그인 후 데이터 변경(목표/플랜/할 일/리뷰/carry) 발생
+8. 로그인 후 데이터 변경(목표/플랜/할 일/리뷰/carry) 발생
 Expected: debounce 후 원격 upsert 반영
 
-8. 소프트 삭제된 할 일(`deleted_at` 존재)
+9. 소프트 삭제된 할 일(`deleted_at` 존재)
 Expected: 원격 `tasks.deleted_at`에 반영
 
-9. 하드 삭제(엔티티 제거)
+10. 하드 삭제(엔티티 제거)
 Expected: 원격에서도 누락 엔티티가 삭제(reconcile)
 
 ### C. 멀티 계정 안전성
-10. A 계정 로그인 후 데이터 생성 -> 로그아웃 -> B 계정 로그인
+11. A 계정 로그인 후 데이터 생성 -> 로그아웃 -> B 계정 로그인
 Expected: A 로컬 데이터가 B 계정으로 푸시되지 않음(로컬 owner guard 동작)
 
 ### D. 배포/라우팅
-11. Vercel 운영 URL 루트 진입
+12. Vercel 운영 URL 루트 진입
 Expected: 앱 로딩 정상
 
-12. 딥링크 진입(`/plan/:planId`, `/goals/:goalId`, `/goal-picker` 등)
+13. 딥링크 진입(`/plan/:planId`, `/goals/:goalId`, `/goal-picker` 등)
 Expected: 404 없이 앱 라우팅
 
-13. 딥링크 상태에서 브라우저 새로고침
+14. 딥링크 상태에서 브라우저 새로고침
 Expected: rewrite로 index.html fallback 후 정상 렌더
 
 ### E. 오프라인 허용
-14. 네트워크 끊긴 상태에서 로컬 CRUD
+15. 네트워크 끊긴 상태에서 로컬 CRUD
 Expected: 로컬 UX 정상, sync 실패는 콘솔 경고만 발생
 
-15. 네트워크 복구 후 데이터 변경
+16. 네트워크 복구 후 데이터 변경
 Expected: 다음 debounce 주기에 원격 반영 재개
 
 ## 4) 이슈 메모

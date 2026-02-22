@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { AuthProvider } from '@/src/auth/AuthProvider';
 import { ToastProvider } from '@/src/components/toast/ToastProvider';
 import { LATEST_SCHEMA_VERSION, runSchemaMigrations } from '@/src/services/migrationService';
 import { useAppStore } from '@/src/state/store';
@@ -27,13 +28,16 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View className="dark flex-1 bg-bg">
-        <ToastProvider>
-          <AppBoot />
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="(modals)" options={{ headerShown: false }} />
-          </Stack>
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <AppBoot />
+            <Stack>
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="(modals)" options={{ headerShown: false }} />
+            </Stack>
+          </ToastProvider>
+        </AuthProvider>
       </View>
     </GestureHandlerRootView>
   );

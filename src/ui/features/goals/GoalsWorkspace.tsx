@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/src/auth/useAuth';
+import { DatePickerCalendar } from '@/src/components/DatePickerCalendar';
 import { formatWeekLabel } from '@/src/core/time/week';
 import { isBlank, isValidIsoDateInput, normalizeTitle } from '@/src/core/validation/form';
 import { useToast } from '@/src/components/toast/ToastProvider';
 import { archiveGoal, hardDeleteGoal } from '@/src/services/goalService';
 import { useAppStore } from '@/src/state/store';
-import { Button, Card, EmptyState, Input, Label, Surface } from '@/src/ui/components';
+import { Button, Card, EmptyState, GoalDueBadge, Icon, Input, Label, Surface } from '@/src/ui/components';
 import { ResponsiveShell } from '@/src/ui/layout/ResponsiveShell';
+import { useBreakpoint } from '@/src/ui/layout/useBreakpoint';
 
 type MobileView = 'index' | 'detail';
 
@@ -16,9 +19,16 @@ interface GoalsWorkspaceProps {
   mobileView: MobileView;
 }
 
+function todayDateKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 export function GoalsWorkspace({ routeGoalId, mobileView }: GoalsWorkspaceProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { isDesktop } = useBreakpoint();
+  const { signOut } = useAuth();
 
   const goals = useAppStore((state) => state.goals);
   const plans = useAppStore((state) => state.plans);
@@ -94,17 +104,66 @@ export function GoalsWorkspace({ routeGoalId, mobileView }: GoalsWorkspaceProps)
   };
 
   const leftPanel = (
-    <ScrollView className="flex-1" contentContainerStyle={{ gap: 10 }}>
+    <ScrollView className="flex-1" contentContainerStyle={{ gap: 12 }}>
+      {!isDesktop ? (
+        <View className="flex-row justify-end">
+          <Button
+            label="로그아웃"
+            variant="ghost"
+            iconLeft={<Icon name="x-circle" size={14} color="#9aa1ae" />}
+            onPress={async () => {
+              const error = await signOut();
+              if (error) {
+                showToast(error.message, 'error');
+                return;
+              }
+              showToast('로그아웃되었습니다.', 'success');
+              router.replace('/sign-in');
+            }}
+          />
+        </View>
+      ) : null}
       <Surface>
         <Label className="mb-2 text-base font-semibold">새 목표</Label>
         <Input placeholder="목표 제목" value={title} onChangeText={setTitle} className="mb-2" />
         <Input multiline className="mb-2 min-h-[88px]" placeholder="설명" value={description} onChangeText={setDescription} textAlignVertical="top" />
         <View className="mb-2 flex-row gap-2">
-          <Button label="기한 없음" variant={dueType === 'none' ? 'primary' : 'ghost'} size="sm" onPress={() => setDueType('none')} />
-          <Button label="날짜 기한" variant={dueType === 'date' ? 'primary' : 'ghost'} size="sm" onPress={() => setDueType('date')} />
+          <Button
+            label="기한 없음"
+            variant={dueType === 'none' ? 'primary' : 'ghost'}
+            size="sm"
+            iconLeft={<Icon name="slash" size={13} color={dueType === 'none' ? '#f2f4f8' : '#9aa1ae'} />}
+            onPress={() => setDueType('none')}
+          />
+          <Button
+            label="날짜 기한"
+            variant={dueType === 'date' ? 'primary' : 'ghost'}
+            size="sm"
+            iconLeft={<Icon name="calendar" size={13} color={dueType === 'date' ? '#f2f4f8' : '#9aa1ae'} />}
+            onPress={() => {
+              setDueType('date');
+              if (!dueDate) {
+                setDueDate(todayDateKey());
+              }
+            }}
+          />
         </View>
-        {dueType === 'date' ? <Input placeholder="YYYY-MM-DD" value={dueDate} onChangeText={setDueDate} className="mb-2" /> : null}
-        <Button label="+ Goal" variant="primary" onPress={createGoalSubmit} full />
+        {dueType === 'date' ? (
+          <View className="mb-2 gap-2">
+            <DatePickerCalendar value={dueDate || todayDateKey()} onChange={setDueDate} />
+            <View className="flex-row items-center justify-between">
+              <Label muted className="text-sm">선택 기한: {dueDate || '-'}</Label>
+              {dueDate ? <GoalDueBadge goal={{ dueType: 'date', dueDate }} /> : null}
+            </View>
+          </View>
+        ) : null}
+        <Button
+          label="목표 추가"
+          variant="primary"
+          iconLeft={<Icon name="plus" size={14} color="#f2f4f8" />}
+          onPress={createGoalSubmit}
+          full
+        />
       </Surface>
 
       {activeGoals.length === 0 ? <EmptyState title="활성 목표가 없습니다" /> : null}
@@ -113,36 +172,46 @@ export function GoalsWorkspace({ routeGoalId, mobileView }: GoalsWorkspaceProps)
           <Button
             label={goal.title}
             variant="ghost"
-            className="justify-start px-0"
+            className="justify-start"
             textClassName="text-base"
             onPress={() => router.push(`/goals/${goal.id}`)}
           />
-          <Label muted className="text-sm">{goal.description || '-'}</Label>
+          <GoalDueBadge goal={goal} style={{ marginTop: 8, marginBottom: 2 }} />
+          <View className="mt-2 flex-row items-center gap-2">
+            <Icon name="circle-alert" size={14} color="#9aa1ae" />
+            <Label muted className="flex-1 text-sm leading-5">{goal.description || '-'}</Label>
+          </View>
         </Card>
       ))}
     </ScrollView>
   );
 
   const centerPanel = selectedGoal && selectedGoal.systemType !== 'inbox' ? (
-    <ScrollView className="flex-1" contentContainerStyle={{ gap: 10 }}>
+    <ScrollView className="flex-1" contentContainerStyle={{ gap: 12 }}>
       <View className="flex-row items-center justify-between">
         <Label className="text-xl font-semibold">{selectedGoal.title}</Label>
         <View className="flex-row gap-2">
           <Button
-            label="Archive"
+            label="보관"
             variant="ghost"
+            iconLeft={<Icon name="archive" size={14} color="#9aa1ae" />}
             onPress={() => {
               archiveGoal(useAppStore.getState(), selectedGoal.id);
               showToast('목표를 아카이브했습니다.', 'info');
               router.replace('/goals');
             }}
           />
-          <Button label="Delete" variant="danger" onPress={() => setHardDeleteOpen(true)} />
+          <Button
+            label="삭제"
+            variant="danger"
+            iconLeft={<Icon name="trash-2" size={14} color="#ff6b63" />}
+            onPress={() => setHardDeleteOpen(true)}
+          />
         </View>
       </View>
 
       <Surface>
-        <Label className="mb-2 text-sm font-semibold">Goal 정보</Label>
+        <Label className="mb-2 text-sm font-semibold">목표 정보</Label>
         <Input className="mb-2" value={editTitle} onChangeText={setEditTitle} placeholder="제목" />
         <Input
           multiline
@@ -155,6 +224,7 @@ export function GoalsWorkspace({ routeGoalId, mobileView }: GoalsWorkspaceProps)
         <Button
           label="저장"
           variant="primary"
+          iconLeft={<Icon name="save" size={14} color="#f2f4f8" />}
           onPress={() => {
             if (!editTitle.trim()) {
               showToast('목표 제목을 입력하세요.', 'error');
@@ -169,7 +239,8 @@ export function GoalsWorkspace({ routeGoalId, mobileView }: GoalsWorkspaceProps)
       <Surface>
         <Label className="mb-2 text-sm font-semibold">최근 플랜 (8주)</Label>
         {weeklyPlanHistory.length === 0 ? <Label muted className="text-sm">히스토리 없음</Label> : null}
-        {weeklyPlanHistory.map(({ plan, completionRate, reviewSummary }) => (
+        <View className="gap-3">
+          {weeklyPlanHistory.map(({ plan, completionRate, reviewSummary }) => (
           <Card key={plan.id}>
             <Label className="text-sm font-semibold">{formatWeekLabel(new Date(plan.periodStart))}</Label>
             <Label muted className="text-sm">완료율 {(completionRate * 100).toFixed(0)}%</Label>
@@ -177,6 +248,7 @@ export function GoalsWorkspace({ routeGoalId, mobileView }: GoalsWorkspaceProps)
             <Button
               label="열기"
               variant="ghost"
+              iconLeft={<Icon name="external-link" size={13} color="#9aa1ae" />}
               onPress={() => {
                 setSelectedPlanId(plan.id);
                 setSelectedWeekStart(plan.periodStart);
@@ -184,24 +256,32 @@ export function GoalsWorkspace({ routeGoalId, mobileView }: GoalsWorkspaceProps)
               }}
             />
           </Card>
-        ))}
+          ))}
+        </View>
       </Surface>
 
       <Modal visible={hardDeleteOpen} transparent animationType="fade" onRequestClose={() => setHardDeleteOpen(false)}>
         <View className="flex-1 items-center justify-center bg-black/55 px-4">
           <Surface className="w-full max-w-[520px] gap-3 p-4">
             <Label className="text-base font-semibold">영구 삭제 확인</Label>
-            <Label muted className="text-sm">연결된 주간플랜/Task/Review/CarryAction이 모두 삭제됩니다.</Label>
+            <Label muted className="text-sm">연결된 주간플랜/할 일/리뷰/이월 결정이 모두 삭제됩니다.</Label>
             <Button
               label={hardDeleteChecked ? '확인 체크됨' : '삭제 내용을 이해했습니다'}
               variant={hardDeleteChecked ? 'primary' : 'ghost'}
+              iconLeft={<Icon name={hardDeleteChecked ? 'check-circle' : 'circle-alert'} size={14} color={hardDeleteChecked ? '#f2f4f8' : '#9aa1ae'} />}
               onPress={() => setHardDeleteChecked((prev) => !prev)}
             />
             <View className="flex-row gap-2">
-              <Button label="취소" variant="ghost" onPress={() => { setHardDeleteOpen(false); setHardDeleteChecked(false); }} />
+              <Button
+                label="취소"
+                variant="ghost"
+                iconLeft={<Icon name="x" size={14} color="#9aa1ae" />}
+                onPress={() => { setHardDeleteOpen(false); setHardDeleteChecked(false); }}
+              />
               <Button
                 label="영구 삭제"
                 variant="danger"
+                iconLeft={<Icon name="trash-2" size={14} color="#ff6b63" />}
                 disabled={!hardDeleteChecked}
                 onPress={() => {
                   hardDeleteGoal(useAppStore.getState(), selectedGoal.id);
@@ -217,7 +297,7 @@ export function GoalsWorkspace({ routeGoalId, mobileView }: GoalsWorkspaceProps)
       </Modal>
     </ScrollView>
   ) : (
-    <EmptyState title="선택된 Goal이 없습니다" description="왼쪽 리스트에서 목표를 선택하세요." />
+    <EmptyState title="선택된 목표가 없습니다" description="왼쪽 리스트에서 목표를 선택하세요." />
   );
 
   return (

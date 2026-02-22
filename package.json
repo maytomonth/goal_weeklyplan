@@ -12,6 +12,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "build": "expo export -p web --output-dir dist",
     "build:web": "expo export --platform web"
   },
   "dependencies": {

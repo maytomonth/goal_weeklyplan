@@ -23,27 +23,24 @@ export function applyCarryActionsAndEnsureNextPlan(
     throw new Error('Plan not found');
   }
   const sourceGoalId = plan.goalId;
+  const nextPeriod = getNextWeekPeriodFromStart(new Date(plan.periodStart));
+  const nextStartIso = nextPeriod.start.toISOString();
+  const nextEndIso = nextPeriod.end.toISOString();
 
   if (store.appliedCarryByPlanId[planId]) {
-    const nextPeriod = getNextWeekPeriodFromStart(new Date(plan.periodStart));
-    return store.ensureWeekPlan(nextPeriod.start.toISOString(), nextPeriod.end.toISOString(), sourceGoalId, planId);
+    return store.ensureGoalWeeklyPlan(nextStartIso, nextEndIso, sourceGoalId, planId);
   }
 
-  const nextPeriod = getNextWeekPeriodFromStart(new Date(plan.periodStart));
-  const nextPlanId = store.ensureWeekPlan(
-    nextPeriod.start.toISOString(),
-    nextPeriod.end.toISOString(),
-    sourceGoalId,
-    planId,
-  );
+  const nextPlanId = store.ensureGoalWeeklyPlan(nextStartIso, nextEndIso, sourceGoalId, planId);
   const reviewId = store.ensureReview(planId);
-  const nextPlan = store.plans[nextPlanId];
-  if (!nextPlan) {
-    throw new Error('Failed to resolve next week plan');
-  }
+  // getState() snapshot passed into service can be stale after set();
+  // rely on selector-like API that reads current store instead.
+  const nextPlan = store.getWeekPlan(nextStartIso, sourceGoalId);
+  const nextGoalId = nextPlan?.goalId ?? sourceGoalId;
 
   const todos = Object.values(store.tasks)
     .filter((task) => task.planId === planId && task.goalId === sourceGoalId)
+    .filter((task) => !task.deletedAt)
     .filter((task) => task.status === 'todo')
     .sort((a, b) => a.order - b.order);
 
@@ -70,7 +67,7 @@ export function applyCarryActionsAndEnsureNextPlan(
       const nextTaskId = store.addTask({
         planId: nextPlanId,
         title: task.title,
-        goalId: nextPlan.goalId,
+        goalId: nextGoalId,
         carryFromTaskId: task.id,
       });
       toTaskIds = [nextTaskId];
@@ -91,7 +88,7 @@ export function applyCarryActionsAndEnsureNextPlan(
       const nextTaskId = store.addTask({
         planId: nextPlanId,
         title,
-        goalId: nextPlan.goalId,
+        goalId: nextGoalId,
         carryFromTaskId: task.id,
       });
       toTaskIds = [nextTaskId];
@@ -108,7 +105,7 @@ export function applyCarryActionsAndEnsureNextPlan(
         store.addTask({
           planId: nextPlanId,
           title,
-          goalId: nextPlan.goalId,
+          goalId: nextGoalId,
           carryFromTaskId: task.id,
           splitParentTaskId: task.id,
         }),

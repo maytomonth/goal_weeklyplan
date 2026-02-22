@@ -106,11 +106,14 @@ export interface UiSlice {
   selectedWeekStartIso: string | null;
   selectedPlanId: ID | null;
   carryInboxOpen: boolean;
+  desktopSidebarCollapsed: boolean;
   appliedCarryByPlanId: Record<ID, boolean>;
   schemaVersion: number;
   recentGoalIds: ID[];
   setSelectedPlanId: (planId: ID | null) => void;
   setCarryInboxOpen: (open: boolean) => void;
+  setDesktopSidebarCollapsed: (collapsed: boolean) => void;
+  toggleDesktopSidebar: () => void;
   markCarryApplied: (planId: ID) => void;
   setSchemaVersion: (version: number) => void;
   pushRecentGoal: (goalId: ID) => void;

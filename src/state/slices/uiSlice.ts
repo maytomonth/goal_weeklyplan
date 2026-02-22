@@ -5,11 +5,17 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set) => (
   selectedWeekStartIso: null,
   selectedPlanId: null,
   carryInboxOpen: false,
+  desktopSidebarCollapsed: false,
   appliedCarryByPlanId: {},
   schemaVersion: 1,
   recentGoalIds: [],
   setSelectedPlanId: (planId) => set({ selectedPlanId: planId }),
   setCarryInboxOpen: (open) => set({ carryInboxOpen: open }),
+  setDesktopSidebarCollapsed: (collapsed) => set({ desktopSidebarCollapsed: collapsed }),
+  toggleDesktopSidebar: () =>
+    set((state) => ({
+      desktopSidebarCollapsed: !state.desktopSidebarCollapsed,
+    })),
   markCarryApplied: (planId) =>
     set((state) => ({
       appliedCarryByPlanId: {

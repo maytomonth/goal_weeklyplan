@@ -39,6 +39,7 @@ export function makeTestStore(seed: Seed = {}): AppStore {
     selectedWeekStartIso: null,
     selectedPlanId: null,
     carryInboxOpen: false,
+    desktopSidebarCollapsed: false,
     appliedCarryByPlanId: {},
     schemaVersion: 3,
     recentGoalIds: [],
@@ -411,6 +412,12 @@ export function makeTestStore(seed: Seed = {}): AppStore {
 
     setSelectedPlanId: (planId) => {
       store.selectedPlanId = planId;
+    },
+    setDesktopSidebarCollapsed: (collapsed) => {
+      store.desktopSidebarCollapsed = collapsed;
+    },
+    toggleDesktopSidebar: () => {
+      store.desktopSidebarCollapsed = !store.desktopSidebarCollapsed;
     },
     setCarryInboxOpen: (open) => {
       store.carryInboxOpen = open;

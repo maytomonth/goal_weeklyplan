@@ -94,4 +94,25 @@ export const createGoalsSlice: StateCreator<AppStore, [], [], GoalsSlice> = (set
       };
     });
   },
+  hardDeleteGoal: (goalId) => {
+    const planIds = Object.values(get().plans)
+      .filter((plan) => plan.goalId === goalId)
+      .map((plan) => plan.id);
+
+    planIds.forEach((planId) => get().deleteWeeklyPlan(planId));
+
+    set((state) => {
+      if (!state.goals[goalId]) {
+        return state;
+      }
+      const nextGoals = { ...state.goals };
+      delete nextGoals[goalId];
+
+      const nextRecentGoalIds = state.recentGoalIds.filter((id) => id !== goalId);
+      return {
+        goals: nextGoals,
+        recentGoalIds: nextRecentGoalIds,
+      };
+    });
+  },
 });

@@ -105,6 +105,84 @@ export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set
 
     return { ok: true };
   },
+  removeTaskFromTop3: (planId, taskId) => {
+    set((state) => {
+      const plan = state.plans[planId];
+      if (!plan || !plan.top3TaskIds.includes(taskId)) {
+        return state;
+      }
+
+      return {
+        plans: {
+          ...state.plans,
+          [planId]: {
+            ...plan,
+            top3TaskIds: plan.top3TaskIds.filter((id) => id !== taskId),
+            updatedAt: nowIso(),
+          },
+        },
+      };
+    });
+  },
+  deleteWeeklyPlan: (planId) => {
+    set((state) => {
+      const plan = state.plans[planId];
+      if (!plan) {
+        return state;
+      }
+
+      const nextPlans = { ...state.plans };
+      delete nextPlans[planId];
+
+      const planTaskIds = Object.values(state.tasks)
+        .filter((task) => task.planId === planId)
+        .map((task) => task.id);
+
+      const nextTasks = { ...state.tasks };
+      planTaskIds.forEach((taskId) => {
+        delete nextTasks[taskId];
+      });
+
+      const reviewIds = Object.values(state.reviews)
+        .filter((review) => review.planId === planId)
+        .map((review) => review.id);
+      const reviewIdSet = new Set(reviewIds);
+
+      const nextReviews = Object.fromEntries(
+        Object.entries(state.reviews).filter(([, review]) => review.planId !== planId),
+      );
+
+      const planTaskIdSet = new Set(planTaskIds);
+      const nextCarryActions = Object.fromEntries(
+        Object.entries(state.carryActions)
+          .filter(([, action]) => !reviewIdSet.has(action.reviewId))
+          .filter(([, action]) => !planTaskIdSet.has(action.fromTaskId))
+          .map(([id, action]) => [
+            id,
+            {
+              ...action,
+              toTaskIds: action.toTaskIds.filter((taskId) => !planTaskIdSet.has(taskId)),
+            },
+          ]),
+      );
+
+      const nextCarryDraft = { ...state.carryDraftByPlan };
+      delete nextCarryDraft[planId];
+
+      const nextAppliedCarry = { ...state.appliedCarryByPlanId };
+      delete nextAppliedCarry[planId];
+
+      return {
+        plans: nextPlans,
+        tasks: nextTasks,
+        reviews: nextReviews,
+        carryActions: nextCarryActions,
+        carryDraftByPlan: nextCarryDraft,
+        appliedCarryByPlanId: nextAppliedCarry,
+        selectedPlanId: state.selectedPlanId === planId ? null : state.selectedPlanId,
+      };
+    });
+  },
   setSelectedWeekStart: (periodStartIso) => {
     set({ selectedWeekStartIso: periodStartIso });
   },

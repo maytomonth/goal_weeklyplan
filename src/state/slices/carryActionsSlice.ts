@@ -25,4 +25,28 @@ export const createCarryActionsSlice: StateCreator<AppStore, [], [], CarryAction
 
     return id;
   },
+  pruneCarryActionsByTaskIds: (taskIds) => {
+    const taskIdSet = new Set(taskIds);
+    set((state) => ({
+      carryActions: Object.fromEntries(
+        Object.entries(state.carryActions)
+          .filter(([, action]) => !taskIdSet.has(action.fromTaskId))
+          .map(([id, action]) => [
+            id,
+            {
+              ...action,
+              toTaskIds: action.toTaskIds.filter((taskId) => !taskIdSet.has(taskId)),
+            },
+          ]),
+      ),
+    }));
+  },
+  pruneCarryActionsByReviewIds: (reviewIds) => {
+    const reviewIdSet = new Set(reviewIds);
+    set((state) => ({
+      carryActions: Object.fromEntries(
+        Object.entries(state.carryActions).filter(([, action]) => !reviewIdSet.has(action.reviewId)),
+      ),
+    }));
+  },
 });

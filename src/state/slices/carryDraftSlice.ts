@@ -104,4 +104,24 @@ export const createCarryDraftSlice: StateCreator<AppStore, [], [], CarryDraftSli
       return { carryDraftByPlan: next };
     });
   },
+  clearCarryDraftForTask: (planId, taskId) => {
+    set((state) => {
+      const byPlan = state.carryDraftByPlan[planId];
+      if (!byPlan || !byPlan[taskId]) {
+        return state;
+      }
+
+      const nextByPlan = { ...byPlan };
+      delete nextByPlan[taskId];
+
+      const next = { ...state.carryDraftByPlan };
+      if (Object.keys(nextByPlan).length === 0) {
+        delete next[planId];
+      } else {
+        next[planId] = nextByPlan;
+      }
+
+      return { carryDraftByPlan: next };
+    });
+  },
 });

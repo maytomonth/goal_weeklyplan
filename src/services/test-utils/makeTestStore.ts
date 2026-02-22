@@ -74,6 +74,13 @@ export function makeTestStore(seed: Seed = {}): AppStore {
       if (!goal) return;
       store.goals[goalId] = { ...goal, status: 'archived', updatedAt: nowIso() };
     },
+    hardDeleteGoal: (goalId) => {
+      Object.values(store.plans)
+        .filter((plan) => plan.goalId === goalId)
+        .forEach((plan) => store.deleteWeeklyPlan(plan.id));
+      delete store.goals[goalId];
+      store.recentGoalIds = store.recentGoalIds.filter((id) => id !== goalId);
+    },
 
     ensureGoalWeeklyPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
       const resolvedGoalId = goalId;
@@ -122,6 +129,46 @@ export function makeTestStore(seed: Seed = {}): AppStore {
       };
       return { ok: true };
     },
+    removeTaskFromTop3: (planId, taskId) => {
+      const plan = store.plans[planId];
+      if (!plan) return;
+      store.plans[planId] = {
+        ...plan,
+        top3TaskIds: plan.top3TaskIds.filter((id) => id !== taskId),
+        updatedAt: nowIso(),
+      };
+    },
+    deleteWeeklyPlan: (planId) => {
+      const planTaskIds = Object.values(store.tasks)
+        .filter((task) => task.planId === planId)
+        .map((task) => task.id);
+      planTaskIds.forEach((taskId) => delete store.tasks[taskId]);
+
+      const reviewIds = Object.values(store.reviews)
+        .filter((review) => review.planId === planId)
+        .map((review) => review.id);
+      reviewIds.forEach((reviewId) => delete store.reviews[reviewId]);
+
+      const reviewIdSet = new Set(reviewIds);
+      const taskIdSet = new Set(planTaskIds);
+      Object.entries(store.carryActions).forEach(([actionId, action]) => {
+        if (reviewIdSet.has(action.reviewId) || taskIdSet.has(action.fromTaskId)) {
+          delete store.carryActions[actionId];
+          return;
+        }
+        store.carryActions[actionId] = {
+          ...action,
+          toTaskIds: action.toTaskIds.filter((taskId) => !taskIdSet.has(taskId)),
+        };
+      });
+
+      delete store.carryDraftByPlan[planId];
+      delete store.appliedCarryByPlanId[planId];
+      if (store.selectedPlanId === planId) {
+        store.selectedPlanId = null;
+      }
+      delete store.plans[planId];
+    },
     setSelectedWeekStart: (periodStartIso) => {
       store.selectedWeekStartIso = periodStartIso;
     },
@@ -145,6 +192,7 @@ export function makeTestStore(seed: Seed = {}): AppStore {
         splitParentTaskId,
         createdAt: ts,
         updatedAt: ts,
+        deletedAt: null,
       };
       return id;
     },
@@ -166,6 +214,42 @@ export function makeTestStore(seed: Seed = {}): AppStore {
           store.tasks[taskId] = { ...task, order: index, updatedAt: nowIso() };
         }
       });
+    },
+    softDeleteTask: (taskId) => {
+      const task = store.tasks[taskId];
+      if (!task || task.deletedAt) return;
+      store.tasks[taskId] = { ...task, deletedAt: nowIso(), updatedAt: nowIso() };
+      store.removeTaskFromTop3(task.planId, taskId);
+    },
+    undoSoftDeleteTask: (taskId) => {
+      const task = store.tasks[taskId];
+      if (!task) return;
+      store.tasks[taskId] = { ...task, deletedAt: null, updatedAt: nowIso() };
+    },
+    hardDeleteTask: (taskId) => {
+      const task = store.tasks[taskId];
+      if (!task) return;
+      store.removeTaskFromTop3(task.planId, taskId);
+      delete store.tasks[taskId];
+
+      Object.entries(store.carryActions).forEach(([actionId, action]) => {
+        if (action.fromTaskId === taskId) {
+          delete store.carryActions[actionId];
+          return;
+        }
+        store.carryActions[actionId] = {
+          ...action,
+          toTaskIds: action.toTaskIds.filter((id) => id !== taskId),
+        };
+      });
+
+      const draft = store.carryDraftByPlan[task.planId];
+      if (draft?.[taskId]) {
+        delete draft[taskId];
+        if (Object.keys(draft).length === 0) {
+          delete store.carryDraftByPlan[task.planId];
+        }
+      }
     },
 
     ensureReview: (planId) => {
@@ -189,6 +273,27 @@ export function makeTestStore(seed: Seed = {}): AppStore {
       const id = nextId('carry');
       store.carryActions[id] = { id, reviewId, fromTaskId, action, toTaskIds, note, createdAt: nowIso() };
       return id;
+    },
+    pruneCarryActionsByTaskIds: (taskIds) => {
+      const taskIdSet = new Set(taskIds);
+      Object.entries(store.carryActions).forEach(([actionId, action]) => {
+        if (taskIdSet.has(action.fromTaskId)) {
+          delete store.carryActions[actionId];
+          return;
+        }
+        store.carryActions[actionId] = {
+          ...action,
+          toTaskIds: action.toTaskIds.filter((id) => !taskIdSet.has(id)),
+        };
+      });
+    },
+    pruneCarryActionsByReviewIds: (reviewIds) => {
+      const reviewIdSet = new Set(reviewIds);
+      Object.entries(store.carryActions).forEach(([actionId, action]) => {
+        if (reviewIdSet.has(action.reviewId)) {
+          delete store.carryActions[actionId];
+        }
+      });
     },
 
     setCarryDecision: (planId, taskId, action) => {
@@ -251,6 +356,14 @@ export function makeTestStore(seed: Seed = {}): AppStore {
     },
     clearCarryDraftForPlan: (planId) => {
       delete store.carryDraftByPlan[planId];
+    },
+    clearCarryDraftForTask: (planId, taskId) => {
+      const byPlan = store.carryDraftByPlan[planId];
+      if (!byPlan || !byPlan[taskId]) return;
+      delete byPlan[taskId];
+      if (Object.keys(byPlan).length === 0) {
+        delete store.carryDraftByPlan[planId];
+      }
     },
 
     setSelectedPlanId: (planId) => {

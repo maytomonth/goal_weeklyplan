@@ -42,6 +42,7 @@ export interface Task {
   splitParentTaskId?: ID;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  deletedAt?: ISODateTime | null;
   completedAt?: ISODateTime;
   note?: string;
 }

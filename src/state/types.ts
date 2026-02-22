@@ -27,6 +27,7 @@ export interface GoalsSlice {
   }) => ID;
   editGoal: (goalId: ID, patch: Partial<Pick<Goal, 'title' | 'description' | 'dueType' | 'dueDate'>>) => void;
   archiveGoal: (goalId: ID) => void;
+  hardDeleteGoal: (goalId: ID) => void;
 }
 
 export interface PlansSlice {
@@ -47,6 +48,8 @@ export interface PlansSlice {
   ) => ID;
   updatePlanNote: (planId: ID, note: string) => void;
   toggleTop3: (planId: ID, taskId: ID) => { ok: boolean; reason?: string };
+  removeTaskFromTop3: (planId: ID, taskId: ID) => void;
+  deleteWeeklyPlan: (planId: ID) => void;
   setSelectedWeekStart: (periodStartIso: string) => void;
 }
 
@@ -62,6 +65,9 @@ export interface TasksSlice {
   updateTask: (taskId: ID, patch: Partial<Pick<Task, 'title' | 'goalId' | 'status' | 'note'>>) => void;
   toggleTaskDone: (taskId: ID) => void;
   reorderTask: (planId: ID, orderedTaskIds: ID[]) => void;
+  softDeleteTask: (taskId: ID) => void;
+  undoSoftDeleteTask: (taskId: ID) => void;
+  hardDeleteTask: (taskId: ID) => void;
 }
 
 export interface ReviewsSlice {
@@ -80,6 +86,8 @@ export interface CarryActionsSlice {
     toTaskIds: ID[];
     note?: string;
   }) => ID;
+  pruneCarryActionsByTaskIds: (taskIds: ID[]) => void;
+  pruneCarryActionsByReviewIds: (reviewIds: ID[]) => void;
 }
 
 export interface CarryDraftSlice {
@@ -90,6 +98,7 @@ export interface CarryDraftSlice {
   setSplitChildren: (planId: ID, taskId: ID, titles: string[]) => void;
   bulkCarryUndecided: (planId: ID, taskIds: ID[]) => void;
   clearCarryDraftForPlan: (planId: ID) => void;
+  clearCarryDraftForTask: (planId: ID, taskId: ID) => void;
 }
 
 export interface UiSlice {

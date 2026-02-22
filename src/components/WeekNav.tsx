@@ -16,7 +16,7 @@ interface KstDay {
   key: string;
 }
 
-const DAY_NAMES = ['월', '화', '수', '목', '금', '토', '일'];
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -70,8 +70,9 @@ function buildCalendarDays(anchorYear: number, anchorMonth: number): KstDay[] {
   const firstOfMonthShiftedMs = Date.UTC(anchorYear, anchorMonth - 1, 1, 12, 0, 0, 0);
   const firstOfMonthShifted = new Date(firstOfMonthShiftedMs);
   const dayOfWeek = firstOfMonthShifted.getUTCDay();
-  const daysFromMonday = (dayOfWeek + 6) % 7;
-  const firstCellShiftedMs = firstOfMonthShiftedMs - daysFromMonday * DAY_MS;
+  // Calendar view starts on Sunday while week logic stays Monday-based.
+  const daysFromSunday = dayOfWeek;
+  const firstCellShiftedMs = firstOfMonthShiftedMs - daysFromSunday * DAY_MS;
 
   return Array.from({ length: 42 }, (_, index) => {
     const shifted = new Date(firstCellShiftedMs + index * DAY_MS);
@@ -115,6 +116,11 @@ export function WeekNav({ weekStartIso, onSelectWeekStart, onMoveCurrentWeek }: 
     const weekStartKst = toKstParts(selectedWeekStart);
     return new Set(Array.from({ length: 7 }, (_, index) => addKstDays(weekStartKst, index).key));
   }, [selectedWeekStart]);
+  const selectedWeekStartKey = useMemo(() => toKstParts(selectedWeekStart).key, [selectedWeekStart]);
+  const selectedWeekEndKey = useMemo(
+    () => addKstDays(toKstParts(selectedWeekStart), 6).key,
+    [selectedWeekStart],
+  );
 
   const onPickDay = (day: KstDay) => {
     const stableDate = kstPartsToStableDate(day.year, day.month, day.day);
@@ -173,6 +179,9 @@ export function WeekNav({ weekStartIso, onSelectWeekStart, onMoveCurrentWeek }: 
               const isInMonth = day.month === monthAnchor.month;
               const inSelectedWeek = selectedWeekKeys.has(day.key);
               const isToday = day.key === todayKey;
+              const isWeekStart = day.key === selectedWeekStartKey;
+              const isWeekEnd = day.key === selectedWeekEndKey;
+              const isWeekMiddle = inSelectedWeek && !isWeekStart && !isWeekEnd;
 
               return (
                 <Pressable
@@ -181,6 +190,9 @@ export function WeekNav({ weekStartIso, onSelectWeekStart, onMoveCurrentWeek }: 
                     styles.dayCell,
                     !isInMonth ? styles.dayOutOfMonth : undefined,
                     inSelectedWeek ? styles.dayInSelectedWeek : undefined,
+                    isWeekStart ? styles.dayWeekStart : undefined,
+                    isWeekMiddle ? styles.dayWeekMiddle : undefined,
+                    isWeekEnd ? styles.dayWeekEnd : undefined,
                     isToday ? styles.dayToday : undefined,
                   ]}
                   onPress={() => onPickDay(day)}
@@ -201,13 +213,35 @@ export function WeekNav({ weekStartIso, onSelectWeekStart, onMoveCurrentWeek }: 
         ))}
       </View>
 
-      <Pressable
-        style={[styles.currentButton, isCurrentWeek ? styles.currentButtonDisabled : undefined]}
-        onPress={onMoveCurrentWeek}
-        disabled={isCurrentWeek}
-      >
-        <Text style={styles.currentButtonText}>이번 주</Text>
-      </Pressable>
+      <View style={styles.weekActionRow}>
+        <Pressable
+          style={styles.weekNavButton}
+          onPress={() => {
+            const prevStart = new Date(selectedWeekStart.getTime() - 7 * DAY_MS);
+            onSelectWeekStart(prevStart.toISOString());
+          }}
+        >
+          <Text style={styles.weekNavButtonText}>← 이전 주</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.currentButton, isCurrentWeek ? styles.currentButtonDisabled : undefined]}
+          onPress={onMoveCurrentWeek}
+          disabled={isCurrentWeek}
+        >
+          <Text style={styles.currentButtonText}>이번 주</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.weekNavButton}
+          onPress={() => {
+            const nextStart = new Date(selectedWeekStart.getTime() + 7 * DAY_MS);
+            onSelectWeekStart(nextStart.toISOString());
+          }}
+        >
+          <Text style={styles.weekNavButtonText}>다음 주 →</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -269,8 +303,24 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   dayInSelectedWeek: {
-    borderColor: '#0a84ff',
+    borderColor: '#0a84ff66',
     backgroundColor: '#16263a',
+  },
+  dayWeekStart: {
+    marginLeft: 2,
+    marginRight: 0,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  dayWeekMiddle: {
+    marginHorizontal: 0,
+    borderRadius: 0,
+  },
+  dayWeekEnd: {
+    marginLeft: 0,
+    marginRight: 2,
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
   },
   dayToday: {
     borderColor: '#4e5563',
@@ -287,7 +337,7 @@ const styles = StyleSheet.create({
     color: '#9ad5ff',
   },
   currentButton: {
-    marginTop: 4,
+    flex: 1,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#0a84ff',
@@ -298,4 +348,23 @@ const styles = StyleSheet.create({
   },
   currentButtonDisabled: { opacity: 0.45 },
   currentButtonText: { color: '#7cc3ff', fontWeight: '700' },
+  weekActionRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  weekNavButton: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2a2d36',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#1a1c24',
+  },
+  weekNavButtonText: {
+    color: '#c7cddb',
+    fontWeight: '700',
+  },
 });

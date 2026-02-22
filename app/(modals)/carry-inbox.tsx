@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useToast } from '@/src/components/toast/ToastProvider';
 import { selectTasksByPlan } from '@/src/state/selectors/planSelectors';
@@ -10,6 +10,7 @@ const ACTIONS = ['carry', 'split', 'drop', 'rescope'] as const;
 
 export default function CarryInboxModal() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ planId?: string }>();
   const { showToast } = useToast();
 
   const selectedPlanId = useAppStore((state) => state.selectedPlanId);
@@ -22,7 +23,9 @@ export default function CarryInboxModal() {
   const setSplitChildren = useAppStore((state) => state.setSplitChildren);
   const bulkCarryUndecided = useAppStore((state) => state.bulkCarryUndecided);
 
-  const plan = selectedPlanId ? plans[selectedPlanId] : null;
+  const paramPlanId = typeof params.planId === 'string' ? params.planId : null;
+  const planId = paramPlanId ?? selectedPlanId;
+  const plan = planId ? plans[planId] : null;
   const tasks = useAppStore((state) => (plan ? selectTasksByPlan(state, plan.id) : []));
   const draft = useAppStore((state) => (plan ? selectCarryDraft(state, plan.id) : {}));
 

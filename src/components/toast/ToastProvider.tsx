@@ -1,10 +1,14 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type ToastTone = 'info' | 'success' | 'error';
+interface ToastAction {
+  label: string;
+  onPress: () => void;
+}
 
 interface ToastContextValue {
-  showToast: (message: string, tone?: ToastTone) => void;
+  showToast: (message: string, tone?: ToastTone, action?: ToastAction, durationMs?: number) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -12,6 +16,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 interface ToastState {
   message: string;
   tone: ToastTone;
+  action?: ToastAction;
 }
 
 const TONE_COLORS: Record<ToastTone, string> = {
@@ -25,14 +30,14 @@ export function ToastProvider({ children }: PropsWithChildren) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   const showToast = useCallback(
-    (message: string, tone: ToastTone = 'info') => {
-      setToast({ message, tone });
+    (message: string, tone: ToastTone = 'info', action?: ToastAction, durationMs = 1800) => {
+      setToast({ message, tone, action });
       opacity.stopAnimation();
       opacity.setValue(0);
 
       Animated.sequence([
         Animated.timing(opacity, { toValue: 1, duration: 150, useNativeDriver: true }),
-        Animated.delay(1800),
+        Animated.delay(durationMs),
         Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver: true }),
       ]).start(() => {
         setToast(null);
@@ -47,9 +52,21 @@ export function ToastProvider({ children }: PropsWithChildren) {
     <ToastContext.Provider value={value}>
       {children}
       {toast ? (
-        <View pointerEvents="none" style={styles.overlay}>
+        <View pointerEvents="box-none" style={styles.overlay}>
           <Animated.View style={[styles.toast, { backgroundColor: TONE_COLORS[toast.tone], opacity }]}>
             <Text style={styles.toastText}>{toast.message}</Text>
+            {toast.action ? (
+              <Pressable
+                onPress={() => {
+                  toast.action?.onPress();
+                  opacity.stopAnimation();
+                  opacity.setValue(0);
+                  setToast(null);
+                }}
+              >
+                <Text style={styles.actionText}>{toast.action.label}</Text>
+              </Pressable>
+            ) : null}
           </Animated.View>
         </View>
       ) : null}
@@ -78,9 +95,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   toastText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  actionText: {
+    color: '#fef08a',
+    fontWeight: '700',
   },
 });

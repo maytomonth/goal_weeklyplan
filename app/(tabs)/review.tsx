@@ -55,7 +55,7 @@ export default function ReviewScreen() {
   const plans = useAppStore((state) => selectWeeklyPlansForWeek(state, periodStartIso));
 
   useEffect(() => {
-    if (!plans.some((plan) => plan.id === selectedPlanId)) {
+    if (selectedPlanId !== null && !plans.some((plan) => plan.id === selectedPlanId)) {
       setSelectedPlanId(null);
     }
   }, [plans, selectedPlanId, setSelectedPlanId]);
@@ -141,7 +141,7 @@ export default function ReviewScreen() {
 
       {plans.map((item) => {
         const goal = goals[item.goalId];
-        const itemTasks = Object.values(allTasks).filter((task) => task.planId === item.id);
+        const itemTasks = Object.values(allTasks).filter((task) => task.planId === item.id && !task.deletedAt);
         const todo = itemTasks.filter((task) => task.status === 'todo').length;
         const done = itemTasks.filter((task) => task.status === 'done').length;
         const denominator = itemTasks.filter((task) => task.status !== 'dropped').length;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
+  Alert,
   FlatList,
   Modal,
   Platform,
@@ -16,6 +17,8 @@ import { isBlank, normalizeTitle } from '@/src/core/validation/form';
 import { Task } from '@/src/core/types/domain';
 import { WeekNav } from '@/src/components/WeekNav';
 import { useToast } from '@/src/components/toast/ToastProvider';
+import { deleteWeeklyPlan } from '@/src/services/planService';
+import { softDeleteTask, undoSoftDeleteTask } from '@/src/services/taskService';
 import {
   selectTasksByPlan,
   selectWeeklyPlansForWeek,
@@ -69,7 +72,7 @@ export default function PlanScreen() {
   const plans = useAppStore((state) => selectWeeklyPlansForWeek(state, periodStartIso));
 
   useEffect(() => {
-    if (!plans.some((plan) => plan.id === selectedPlanId)) {
+    if (selectedPlanId !== null && !plans.some((plan) => plan.id === selectedPlanId)) {
       setSelectedPlanId(null);
     }
   }, [plans, selectedPlanId, setSelectedPlanId]);
@@ -170,6 +173,47 @@ export default function PlanScreen() {
     }
   };
 
+  const handleDeleteTask = (taskId: string) => {
+    softDeleteTask(useAppStore.getState(), taskId);
+    showToast(
+      '삭제됨',
+      'info',
+      {
+        label: 'Undo',
+        onPress: () => undoSoftDeleteTask(useAppStore.getState(), taskId),
+      },
+      10000,
+    );
+  };
+
+  const handleDeleteSelectedPlan = () => {
+    if (!selectedPlan) {
+      return;
+    }
+
+    const runDelete = () => {
+      deleteWeeklyPlan(useAppStore.getState(), selectedPlan.id);
+      setSelectedPlanId(null);
+      showToast('주간플랜을 삭제했습니다.', 'success');
+    };
+
+    if (Platform.OS === 'web') {
+      if (globalThis.confirm('이 주간플랜을 영구 삭제할까요? 관련 Task/Review/CarryAction도 함께 삭제됩니다.')) {
+        runDelete();
+      }
+      return;
+    }
+
+    Alert.alert(
+      '이 주간플랜 삭제',
+      '관련 Task/Review/CarryAction도 함께 삭제됩니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: runDelete },
+      ],
+    );
+  };
+
   const renderTaskItem = ({ item, drag, isActive }: RenderItemParams<Task>) => (
     <ScaleDecorator>
       <View style={[styles.taskCard, isActive ? styles.taskCardActive : undefined]}>
@@ -189,6 +233,9 @@ export default function PlanScreen() {
         </View>
 
         <View style={styles.taskActions}>
+          <Pressable style={styles.ghostButton} onPress={() => handleDeleteTask(item.id)}>
+            <Text style={styles.ghostButtonText}>삭제</Text>
+          </Pressable>
           <Pressable style={styles.ghostButton} onPress={() => onToggleTop3(item.id)}>
             <Text style={styles.ghostButtonText}>☆ Top3</Text>
           </Pressable>
@@ -202,7 +249,7 @@ export default function PlanScreen() {
     if (!plan) return null;
 
     const goal = goals[plan.goalId];
-    const planTasks = Object.values(allTasks).filter((task) => task.planId === plan.id);
+    const planTasks = Object.values(allTasks).filter((task) => task.planId === plan.id && !task.deletedAt);
     const doneCount = planTasks.filter((task) => task.status === 'done').length;
     const todoCount = planTasks.filter((task) => task.status === 'todo').length;
     const denominator = planTasks.filter((task) => task.status !== 'dropped').length;
@@ -270,6 +317,9 @@ export default function PlanScreen() {
         <Pressable style={styles.primaryCreateBtn} onPress={() => setPickerVisible(true)}>
           <Text style={styles.primaryCreateBtnText}>+ 목표 플랜 추가</Text>
         </Pressable>
+        <Pressable style={styles.inlineActionBtn} onPress={() => router.push('/trash')}>
+          <Text style={styles.inlineActionText}>휴지통</Text>
+        </Pressable>
       </View>
 
       <Text style={styles.sectionTitle}>이번 주 목표 플랜</Text>
@@ -295,6 +345,9 @@ export default function PlanScreen() {
               </Pressable>
               <Pressable style={styles.reviewButton} onPress={() => router.push('/review')}>
                 <Text style={styles.reviewButtonText}>리뷰</Text>
+              </Pressable>
+              <Pressable style={styles.dangerButton} onPress={handleDeleteSelectedPlan}>
+                <Text style={styles.dangerButtonText}>이 주간플랜 삭제</Text>
               </Pressable>
             </View>
           </View>
@@ -451,6 +504,9 @@ export default function PlanScreen() {
                 <Pressable style={styles.ghostButton} onPress={() => onToggleTop3(item.id)}>
                   <Text style={styles.ghostButtonText}>☆ Top3</Text>
                 </Pressable>
+                <Pressable style={styles.ghostButton} onPress={() => handleDeleteTask(item.id)}>
+                  <Text style={styles.ghostButtonText}>삭제</Text>
+                </Pressable>
               </View>
             </View>
           )}
@@ -532,6 +588,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   reviewButtonText: { color: '#fff', fontWeight: '700' },
+  dangerButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    backgroundColor: '#fff1f2',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dangerButtonText: { color: '#b91c1c', fontWeight: '700' },
   noteInput: {
     minHeight: 110,
     borderRadius: 12,

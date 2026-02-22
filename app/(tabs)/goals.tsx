@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { formatWeekLabel, getWeekPeriod } from '@/src/core/time/week';
 import { isBlank, isValidIsoDateInput, normalizeTitle } from '@/src/core/validation/form';
 import { useToast } from '@/src/components/toast/ToastProvider';
+import { archiveGoal, hardDeleteGoal } from '@/src/services/goalService';
 import { useAppStore } from '@/src/state/store';
 
 export default function GoalsScreen() {
@@ -17,7 +18,6 @@ export default function GoalsScreen() {
 
   const createGoal = useAppStore((state) => state.createGoal);
   const editGoal = useAppStore((state) => state.editGoal);
-  const archiveGoal = useAppStore((state) => state.archiveGoal);
   const setSelectedPlanId = useAppStore((state) => state.setSelectedPlanId);
   const setSelectedWeekStart = useAppStore((state) => state.setSelectedWeekStart);
 
@@ -27,6 +27,8 @@ export default function GoalsScreen() {
   const [dueType, setDueType] = useState<'none' | 'date'>('none');
   const [dueDate, setDueDate] = useState('');
   const [errors, setErrors] = useState<{ title?: string; dueDate?: string }>({});
+  const [hardDeleteModalOpen, setHardDeleteModalOpen] = useState(false);
+  const [hardDeleteChecked, setHardDeleteChecked] = useState(false);
 
   const weekStartIso = getWeekPeriod(new Date()).start.toISOString();
 
@@ -136,6 +138,22 @@ export default function GoalsScreen() {
     router.push('/plan');
   };
 
+  const onArchiveSelectedGoal = () => {
+    if (!selectedGoal) return;
+    archiveGoal(useAppStore.getState(), selectedGoal.id);
+    showToast('목표를 아카이브했습니다.', 'info');
+    resetForm();
+  };
+
+  const onHardDeleteSelectedGoal = () => {
+    if (!selectedGoal || !hardDeleteChecked) return;
+    hardDeleteGoal(useAppStore.getState(), selectedGoal.id);
+    showToast('목표를 영구 삭제했습니다.', 'success');
+    setHardDeleteModalOpen(false);
+    setHardDeleteChecked(false);
+    resetForm();
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
@@ -223,16 +241,6 @@ export default function GoalsScreen() {
               <Text style={styles.muted}>{goal.description || '-'}</Text>
               <Text style={styles.muted}>기한: {goal.dueType === 'date' ? goal.dueDate : '없음'}</Text>
             </Pressable>
-            <Pressable
-              style={styles.archiveButton}
-              onPress={() => {
-                archiveGoal(goal.id);
-                showToast('목표를 아카이브했습니다.', 'info');
-                if (selectedGoalId === goal.id) resetForm();
-              }}
-            >
-              <Text style={styles.archiveText}>아카이브</Text>
-            </Pressable>
           </View>
         );
       })}
@@ -240,6 +248,19 @@ export default function GoalsScreen() {
 
       {selectedGoal ? (
         <View style={styles.formCard}>
+          <View style={styles.goalDetailHeader}>
+            <Text style={styles.sectionTitle}>Goal Detail</Text>
+            <View style={styles.detailActionRow}>
+              <Pressable style={styles.archiveButton} onPress={onArchiveSelectedGoal}>
+                <Text style={styles.archiveText}>Archive</Text>
+              </Pressable>
+              <Pressable style={styles.deleteButton} onPress={() => setHardDeleteModalOpen(true)}>
+                <Text style={styles.deleteText}>영구 삭제</Text>
+              </Pressable>
+            </View>
+          </View>
+          <Text style={styles.muted}>설명: {selectedGoal.description || '-'}</Text>
+          <Text style={styles.muted}>기한: {selectedGoal.dueType === 'date' ? selectedGoal.dueDate : '없음'}</Text>
           <Text style={styles.sectionTitle}>최근 플랜 (8주)</Text>
           {weeklyPlanHistory.map(({ plan, completionRate, reviewSummary }) => (
             <View key={plan.id} style={styles.historyCard}>
@@ -268,6 +289,47 @@ export default function GoalsScreen() {
         </View>
       ))}
       {archivedGoals.length === 0 ? <Text style={styles.muted}>아카이브 없음</Text> : null}
+
+      <Modal
+        visible={hardDeleteModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setHardDeleteModalOpen(false);
+          setHardDeleteChecked(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>목표 영구 삭제</Text>
+            <Text style={styles.muted}>
+              해당 Goal과 연결된 WeeklyPlan/Task/Review/CarryAction이 모두 삭제되며 복구할 수 없습니다.
+            </Text>
+            <Pressable style={styles.checkboxRow} onPress={() => setHardDeleteChecked((prev) => !prev)}>
+              <View style={[styles.checkbox, hardDeleteChecked ? styles.checkboxChecked : undefined]} />
+              <Text style={styles.checkboxText}>위 내용을 확인했고 영구 삭제를 진행합니다.</Text>
+            </Pressable>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={styles.ghostButton}
+                onPress={() => {
+                  setHardDeleteModalOpen(false);
+                  setHardDeleteChecked(false);
+                }}
+              >
+                <Text style={styles.ghostButtonText}>취소</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.deleteButton, !hardDeleteChecked ? styles.disabledButton : undefined]}
+                disabled={!hardDeleteChecked}
+                onPress={onHardDeleteSelectedGoal}
+              >
+                <Text style={styles.deleteText}>삭제 확정</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -276,6 +338,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   content: { padding: 16, gap: 12 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  goalDetailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  detailActionRow: { flexDirection: 'row', gap: 8 },
   title: { fontSize: 22, fontWeight: '700' },
   sectionTitle: { fontSize: 16, fontWeight: '700' },
   formCard: {
@@ -370,4 +434,45 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   archiveText: { color: '#b91c1c', fontWeight: '600' },
+  deleteButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#dc2626',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#fff1f2',
+  },
+  deleteText: { color: '#b91c1c', fontWeight: '700' },
+  disabledButton: { opacity: 0.45 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2,6,23,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 520,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    padding: 14,
+    gap: 10,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  checkboxRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+    borderRadius: 3,
+    backgroundColor: '#fff',
+  },
+  checkboxChecked: { backgroundColor: '#0f766e', borderColor: '#0f766e' },
+  checkboxText: { flex: 1, color: '#334155' },
+  modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
 });

@@ -1,6 +1,8 @@
+import '@/global.css';
 import 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ToastProvider } from '@/src/components/toast/ToastProvider';
 import { LATEST_SCHEMA_VERSION, runSchemaMigrations } from '@/src/services/migrationService';
@@ -24,13 +26,15 @@ function AppBoot() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ToastProvider>
-        <AppBoot />
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="(modals)" options={{ headerShown: false }} />
-        </Stack>
-      </ToastProvider>
+      <View className="dark flex-1 bg-bg">
+        <ToastProvider>
+          <AppBoot />
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="(modals)" options={{ headerShown: false }} />
+          </Stack>
+        </ToastProvider>
+      </View>
     </GestureHandlerRootView>
   );
 }

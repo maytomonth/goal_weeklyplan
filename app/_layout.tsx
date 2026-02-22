@@ -1,10 +1,11 @@
 import '@/global.css';
 import 'react-native-gesture-handler';
-import { Stack } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/src/auth/AuthProvider';
+import { useAuth } from '@/src/auth/useAuth';
 import { ToastProvider } from '@/src/components/toast/ToastProvider';
 import { LATEST_SCHEMA_VERSION, runSchemaMigrations } from '@/src/services/migrationService';
 import { useAppStore } from '@/src/state/store';
@@ -24,6 +25,30 @@ function AppBoot() {
   return null;
 }
 
+function AuthGate() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const inAuthRoute = pathname.startsWith('/sign-in');
+    if (!user && !inAuthRoute) {
+      router.replace('/sign-in');
+      return;
+    }
+
+    if (user && inAuthRoute) {
+      router.replace('/plan');
+    }
+  }, [isLoading, pathname, router, user]);
+
+  return null;
+}
+
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -31,6 +56,7 @@ export default function RootLayout() {
         <AuthProvider>
           <ToastProvider>
             <AppBoot />
+            <AuthGate />
             <Stack>
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

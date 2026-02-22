@@ -20,6 +20,16 @@ Vercel/로컬 모두 아래 공개 변수만 사용합니다.
    - `reviews`
    - `carry_actions`
 
+### 빠른 검증
+1. SQL Editor 새 탭 열기
+2. `docs/SUPABASE_VERIFY.sql` 전체 실행
+3. 아래를 확인
+   - 테이블 5개 조회됨
+   - 각 테이블 `rls_enabled = true`
+   - 각 테이블 policy_count = 4
+   - unique 제약 3개 조회됨
+   - `tasks.deleted_at` 컬럼 조회됨
+
 ## 3) RLS 적용 확인
 각 테이블에서 RLS가 활성화되어야 합니다.
 

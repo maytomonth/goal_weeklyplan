@@ -135,49 +135,69 @@ alter table public.tasks enable row level security;
 alter table public.reviews enable row level security;
 alter table public.carry_actions enable row level security;
 
-create policy if not exists goals_owner_select on public.goals
+drop policy if exists goals_owner_select on public.goals;
+create policy goals_owner_select on public.goals
 for select using (auth.uid() = user_id);
-create policy if not exists goals_owner_insert on public.goals
+drop policy if exists goals_owner_insert on public.goals;
+create policy goals_owner_insert on public.goals
 for insert with check (auth.uid() = user_id);
-create policy if not exists goals_owner_update on public.goals
+drop policy if exists goals_owner_update on public.goals;
+create policy goals_owner_update on public.goals
 for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy if not exists goals_owner_delete on public.goals
+drop policy if exists goals_owner_delete on public.goals;
+create policy goals_owner_delete on public.goals
 for delete using (auth.uid() = user_id);
 
-create policy if not exists weekly_plans_owner_select on public.weekly_plans
+drop policy if exists weekly_plans_owner_select on public.weekly_plans;
+create policy weekly_plans_owner_select on public.weekly_plans
 for select using (auth.uid() = user_id);
-create policy if not exists weekly_plans_owner_insert on public.weekly_plans
+drop policy if exists weekly_plans_owner_insert on public.weekly_plans;
+create policy weekly_plans_owner_insert on public.weekly_plans
 for insert with check (auth.uid() = user_id);
-create policy if not exists weekly_plans_owner_update on public.weekly_plans
+drop policy if exists weekly_plans_owner_update on public.weekly_plans;
+create policy weekly_plans_owner_update on public.weekly_plans
 for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy if not exists weekly_plans_owner_delete on public.weekly_plans
+drop policy if exists weekly_plans_owner_delete on public.weekly_plans;
+create policy weekly_plans_owner_delete on public.weekly_plans
 for delete using (auth.uid() = user_id);
 
-create policy if not exists tasks_owner_select on public.tasks
+drop policy if exists tasks_owner_select on public.tasks;
+create policy tasks_owner_select on public.tasks
 for select using (auth.uid() = user_id);
-create policy if not exists tasks_owner_insert on public.tasks
+drop policy if exists tasks_owner_insert on public.tasks;
+create policy tasks_owner_insert on public.tasks
 for insert with check (auth.uid() = user_id);
-create policy if not exists tasks_owner_update on public.tasks
+drop policy if exists tasks_owner_update on public.tasks;
+create policy tasks_owner_update on public.tasks
 for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy if not exists tasks_owner_delete on public.tasks
+drop policy if exists tasks_owner_delete on public.tasks;
+create policy tasks_owner_delete on public.tasks
 for delete using (auth.uid() = user_id);
 
-create policy if not exists reviews_owner_select on public.reviews
+drop policy if exists reviews_owner_select on public.reviews;
+create policy reviews_owner_select on public.reviews
 for select using (auth.uid() = user_id);
-create policy if not exists reviews_owner_insert on public.reviews
+drop policy if exists reviews_owner_insert on public.reviews;
+create policy reviews_owner_insert on public.reviews
 for insert with check (auth.uid() = user_id);
-create policy if not exists reviews_owner_update on public.reviews
+drop policy if exists reviews_owner_update on public.reviews;
+create policy reviews_owner_update on public.reviews
 for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy if not exists reviews_owner_delete on public.reviews
+drop policy if exists reviews_owner_delete on public.reviews;
+create policy reviews_owner_delete on public.reviews
 for delete using (auth.uid() = user_id);
 
-create policy if not exists carry_actions_owner_select on public.carry_actions
+drop policy if exists carry_actions_owner_select on public.carry_actions;
+create policy carry_actions_owner_select on public.carry_actions
 for select using (auth.uid() = user_id);
-create policy if not exists carry_actions_owner_insert on public.carry_actions
+drop policy if exists carry_actions_owner_insert on public.carry_actions;
+create policy carry_actions_owner_insert on public.carry_actions
 for insert with check (auth.uid() = user_id);
-create policy if not exists carry_actions_owner_update on public.carry_actions
+drop policy if exists carry_actions_owner_update on public.carry_actions;
+create policy carry_actions_owner_update on public.carry_actions
 for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy if not exists carry_actions_owner_delete on public.carry_actions
+drop policy if exists carry_actions_owner_delete on public.carry_actions;
+create policy carry_actions_owner_delete on public.carry_actions
 for delete using (auth.uid() = user_id);
 
 commit;

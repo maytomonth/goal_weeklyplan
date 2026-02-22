@@ -65,6 +65,7 @@ export interface TasksSlice {
   updateTask: (taskId: ID, patch: Partial<Pick<Task, 'title' | 'goalId' | 'status' | 'note'>>) => void;
   toggleTaskDone: (taskId: ID) => void;
   reorderTask: (planId: ID, orderedTaskIds: ID[]) => void;
+  reassignTask: (taskId: ID, destinationPlanId: ID, destinationGoalId?: ID) => void;
   softDeleteTask: (taskId: ID) => void;
   undoSoftDeleteTask: (taskId: ID) => void;
   hardDeleteTask: (taskId: ID) => void;

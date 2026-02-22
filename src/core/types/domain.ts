@@ -3,6 +3,7 @@ export type ISODateTime = string;
 
 export type GoalDueType = 'none' | 'date';
 export type GoalStatus = 'active' | 'archived';
+export type GoalSystemType = 'inbox';
 
 export interface Goal {
   id: ID;
@@ -11,6 +12,7 @@ export interface Goal {
   dueType: GoalDueType;
   dueDate?: string;
   status: GoalStatus;
+  systemType?: GoalSystemType;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }

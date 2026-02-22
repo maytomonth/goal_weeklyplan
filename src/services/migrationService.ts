@@ -3,6 +3,8 @@ import { ID } from '@/src/core/types/domain';
 import { AppStore } from '@/src/state/types';
 
 export const MVP2_SCHEMA_VERSION = 2;
+export const INBOX_SCHEMA_VERSION = 3;
+export const LATEST_SCHEMA_VERSION = INBOX_SCHEMA_VERSION;
 
 function resolveTaskGoalId(store: AppStore, task: AppStore['tasks'][string], fallbackGoalId: ID): ID {
   if (task.goalId) return task.goalId;
@@ -86,4 +88,32 @@ export function runMvp2Migration(store: AppStore) {
   }
 
   store.setSchemaVersion(MVP2_SCHEMA_VERSION);
+}
+
+export function runInboxMigration(store: AppStore) {
+  if (store.schemaVersion >= INBOX_SCHEMA_VERSION) {
+    return;
+  }
+
+  const inboxGoalId = store.ensureInboxGoal();
+  const inboxGoal = store.goals[inboxGoalId];
+  if (inboxGoal && inboxGoal.systemType !== 'inbox') {
+    store.goals[inboxGoalId] = {
+      ...inboxGoal,
+      systemType: 'inbox',
+      status: 'active',
+      updatedAt: nowIso(),
+    };
+  }
+
+  store.setSchemaVersion(INBOX_SCHEMA_VERSION);
+}
+
+export function runSchemaMigrations(store: AppStore) {
+  if (store.schemaVersion < MVP2_SCHEMA_VERSION) {
+    runMvp2Migration(store);
+  }
+  if (store.schemaVersion < INBOX_SCHEMA_VERSION) {
+    runInboxMigration(store);
+  }
 }

@@ -4,35 +4,70 @@ import { createId } from '@/src/state/helpers';
 import { AppStore, GoalsSlice } from '@/src/state/types';
 
 export const INBOX_GOAL_TITLE = 'Inbox';
+export const INBOX_GOAL_ID = 'system_inbox_goal';
 
 export const createGoalsSlice: StateCreator<AppStore, [], [], GoalsSlice> = (set, get) => ({
   goals: {},
   ensureInboxGoal: () => {
+    const existingById = get().goals[INBOX_GOAL_ID];
+    if (existingById) {
+      if (existingById.systemType === 'inbox') {
+        return existingById.id;
+      }
+
+      set((state) => ({
+        goals: {
+          ...state.goals,
+          [existingById.id]: {
+            ...existingById,
+            title: INBOX_GOAL_TITLE,
+            status: 'active',
+            systemType: 'inbox',
+            updatedAt: nowIso(),
+          },
+        },
+      }));
+      return existingById.id;
+    }
+
     const existing = Object.values(get().goals).find(
-      (goal) => goal.title === INBOX_GOAL_TITLE && goal.status === 'active',
+      (goal) => goal.systemType === 'inbox' || goal.title === INBOX_GOAL_TITLE,
     );
     if (existing) {
+      if (existing.systemType !== 'inbox') {
+        set((state) => ({
+          goals: {
+            ...state.goals,
+            [existing.id]: {
+              ...existing,
+              status: 'active',
+              systemType: 'inbox',
+              updatedAt: nowIso(),
+            },
+          },
+        }));
+      }
       return existing.id;
     }
 
-    const id = createId();
     const timestamp = nowIso();
     set((state) => ({
       goals: {
         ...state.goals,
-        [id]: {
-          id,
+        [INBOX_GOAL_ID]: {
+          id: INBOX_GOAL_ID,
           title: INBOX_GOAL_TITLE,
-          description: 'Legacy and unlinked tasks',
+          description: 'Unassigned staging tasks',
           dueType: 'none',
           status: 'active',
+          systemType: 'inbox',
           createdAt: timestamp,
           updatedAt: timestamp,
         },
       },
     }));
 
-    return id;
+    return INBOX_GOAL_ID;
   },
   createGoal: ({ title, description, dueType = 'none', dueDate }) => {
     const id = createId();
@@ -48,6 +83,7 @@ export const createGoalsSlice: StateCreator<AppStore, [], [], GoalsSlice> = (set
           dueType,
           dueDate,
           status: 'active',
+          systemType: undefined,
           createdAt: timestamp,
           updatedAt: timestamp,
         },
@@ -78,7 +114,7 @@ export const createGoalsSlice: StateCreator<AppStore, [], [], GoalsSlice> = (set
   archiveGoal: (goalId) => {
     set((state) => {
       const goal = state.goals[goalId];
-      if (!goal) {
+      if (!goal || goal.systemType === 'inbox') {
         return state;
       }
 
@@ -95,6 +131,9 @@ export const createGoalsSlice: StateCreator<AppStore, [], [], GoalsSlice> = (set
     });
   },
   hardDeleteGoal: (goalId) => {
+    if (goalId === INBOX_GOAL_ID) {
+      return;
+    }
     const planIds = Object.values(get().plans)
       .filter((plan) => plan.goalId === goalId)
       .map((plan) => plan.id);

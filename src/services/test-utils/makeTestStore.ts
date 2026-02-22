@@ -1,4 +1,5 @@
 import { nowIso } from '@/src/core/time/week';
+import { INBOX_GOAL_ID, INBOX_GOAL_TITLE } from '@/src/state/slices/goalsSlice';
 import {
   AppStore,
   CarryActionsById,
@@ -39,29 +40,41 @@ export function makeTestStore(seed: Seed = {}): AppStore {
     selectedPlanId: null,
     carryInboxOpen: false,
     appliedCarryByPlanId: {},
-    schemaVersion: 1,
+    schemaVersion: 3,
     recentGoalIds: [],
 
     ensureInboxGoal: () => {
-      const existing = Object.values(store.goals).find((goal) => goal.title === 'Inbox' && goal.status === 'active');
+      const existing = Object.values(store.goals).find(
+        (goal) => goal.systemType === 'inbox' || goal.title === INBOX_GOAL_TITLE,
+      );
       if (existing) return existing.id;
-      const id = nextId('goal');
       const ts = nowIso();
-      store.goals[id] = {
-        id,
-        title: 'Inbox',
-        description: 'Legacy and unlinked tasks',
+      store.goals[INBOX_GOAL_ID] = {
+        id: INBOX_GOAL_ID,
+        title: INBOX_GOAL_TITLE,
+        description: 'Unassigned staging tasks',
         dueType: 'none',
         status: 'active',
+        systemType: 'inbox',
         createdAt: ts,
         updatedAt: ts,
       };
-      return id;
+      return INBOX_GOAL_ID;
     },
     createGoal: ({ title, description, dueType = 'none', dueDate }) => {
       const id = nextId('goal');
       const ts = nowIso();
-      store.goals[id] = { id, title, description, dueType, dueDate, status: 'active', createdAt: ts, updatedAt: ts };
+      store.goals[id] = {
+        id,
+        title,
+        description,
+        dueType,
+        dueDate,
+        status: 'active',
+        systemType: undefined,
+        createdAt: ts,
+        updatedAt: ts,
+      };
       return id;
     },
     editGoal: (goalId, patch) => {
@@ -214,6 +227,36 @@ export function makeTestStore(seed: Seed = {}): AppStore {
           store.tasks[taskId] = { ...task, order: index, updatedAt: nowIso() };
         }
       });
+    },
+    reassignTask: (taskId, destinationPlanId, destinationGoalId) => {
+      const task = store.tasks[taskId];
+      const destinationPlan = store.plans[destinationPlanId];
+      if (!task || !destinationPlan || task.deletedAt) return;
+
+      const nextGoalId = destinationGoalId ?? destinationPlan.goalId;
+      if (nextGoalId !== destinationPlan.goalId) return;
+      if (task.planId === destinationPlanId && task.goalId === nextGoalId) return;
+
+      store.removeTaskFromTop3(task.planId, taskId);
+      const destinationOrder = Object.values(store.tasks).filter(
+        (entry) => entry.planId === destinationPlanId && !entry.deletedAt,
+      ).length;
+
+      const sourceDraft = store.carryDraftByPlan[task.planId];
+      if (sourceDraft?.[taskId]) {
+        delete sourceDraft[taskId];
+        if (Object.keys(sourceDraft).length === 0) {
+          delete store.carryDraftByPlan[task.planId];
+        }
+      }
+
+      store.tasks[taskId] = {
+        ...task,
+        planId: destinationPlanId,
+        goalId: nextGoalId,
+        order: destinationOrder,
+        updatedAt: nowIso(),
+      };
     },
     softDeleteTask: (taskId) => {
       const task = store.tasks[taskId];

@@ -29,7 +29,7 @@ export const useAppStore = create<AppStore>()(
     {
       name: 'goal-tracker-mvp1-store',
       storage: createJSONStorage(() => appStorage),
-      version: 1,
+      version: 3,
     },
   ),
 );

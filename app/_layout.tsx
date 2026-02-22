@@ -3,17 +3,20 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ToastProvider } from '@/src/components/toast/ToastProvider';
-import { MVP2_SCHEMA_VERSION, runMvp2Migration } from '@/src/services/migrationService';
+import { LATEST_SCHEMA_VERSION, runSchemaMigrations } from '@/src/services/migrationService';
 import { useAppStore } from '@/src/state/store';
 
 function AppBoot() {
   const schemaVersion = useAppStore((state) => state.schemaVersion);
+  const ensureInboxGoal = useAppStore((state) => state.ensureInboxGoal);
 
   useEffect(() => {
-    if (schemaVersion < MVP2_SCHEMA_VERSION) {
-      runMvp2Migration(useAppStore.getState());
+    if (schemaVersion < LATEST_SCHEMA_VERSION) {
+      runSchemaMigrations(useAppStore.getState());
     }
-  }, [schemaVersion]);
+    // Inbox goal must always exist even for fully migrated stores.
+    ensureInboxGoal();
+  }, [schemaVersion, ensureInboxGoal]);
 
   return null;
 }
@@ -25,10 +28,7 @@ export default function RootLayout() {
         <AppBoot />
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="(modals)/carry-inbox"
-            options={{ presentation: 'modal', title: 'Carry Inbox' }}
-          />
+          <Stack.Screen name="(modals)" options={{ headerShown: false }} />
         </Stack>
       </ToastProvider>
     </GestureHandlerRootView>

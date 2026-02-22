@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { hardDeleteTask, undoSoftDeleteTask } from '@/src/services/taskService';
 import { selectDeletedTasks } from '@/src/state/selectors/planSelectors';
 import { useAppStore } from '@/src/state/store';
+import { Icon } from '@/src/ui/components';
 
 export default function TrashModal() {
   const router = useRouter();
@@ -24,9 +25,15 @@ export default function TrashModal() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>휴지통</Text>
+        <View style={styles.inlineRow}>
+          <Icon name="trash-2" size={18} color="#f2f4f8" />
+          <Text style={styles.title}>휴지통</Text>
+        </View>
         <Pressable style={styles.closeButton} onPress={() => router.dismiss()}>
-          <Text style={styles.closeButtonText}>닫기</Text>
+          <View style={styles.inlineRow}>
+            <Icon name="x" size={14} color="#f2f4f8" />
+            <Text style={styles.closeButtonText}>닫기</Text>
+          </View>
         </Pressable>
       </View>
 
@@ -39,20 +46,26 @@ export default function TrashModal() {
         return (
           <View key={task.id} style={styles.card}>
             <Text style={styles.taskTitle}>{task.title}</Text>
-            <Text style={styles.muted}>목표: {goalTitle ?? 'Unknown'}</Text>
+            <Text style={styles.muted}>목표: {goalTitle ?? '알 수 없음'}</Text>
             <Text style={styles.muted}>삭제 시각: {task.deletedAt}</Text>
             <View style={styles.actionRow}>
               <Pressable
                 style={styles.restoreButton}
                 onPress={() => undoSoftDeleteTask(useAppStore.getState(), task.id)}
               >
-                <Text style={styles.restoreText}>복원</Text>
+                <View style={styles.inlineRow}>
+                  <Icon name="check-circle" size={13} color="#0a84ff" />
+                  <Text style={styles.restoreText}>복원</Text>
+                </View>
               </Pressable>
               <Pressable
                 style={styles.deleteButton}
                 onPress={() => hardDeleteTask(useAppStore.getState(), task.id)}
               >
-                <Text style={styles.deleteText}>영구삭제</Text>
+                <View style={styles.inlineRow}>
+                  <Icon name="trash-2" size={13} color="#ff6b63" />
+                  <Text style={styles.deleteText}>영구삭제</Text>
+                </View>
               </Pressable>
             </View>
           </View>
@@ -66,6 +79,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0b0f' },
   content: { padding: 16, gap: 12 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { fontSize: 22, fontWeight: '700' },
   closeButton: {
     borderWidth: 1,
@@ -100,7 +114,7 @@ const styles = StyleSheet.create({
     borderColor: '#ff453a',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#1213191f2',
+    backgroundColor: '#26161b',
   },
   deleteText: { color: '#ff6b63', fontWeight: '700' },
   muted: { color: '#9aa1ae' },

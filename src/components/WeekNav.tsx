@@ -1,26 +1,206 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { formatWeekLabel, getWeekPeriod } from '@/src/core/time/week';
+import { getWeekPeriod } from '@/src/core/time/week';
 
 interface WeekNavProps {
   weekStartIso: string;
-  onMoveWeek: (direction: -1 | 1) => void;
+  onSelectWeekStart: (weekStartIso: string) => void;
   onMoveCurrentWeek: () => void;
 }
 
-export function WeekNav({ weekStartIso, onMoveWeek, onMoveCurrentWeek }: WeekNavProps) {
-  const periodStart = new Date(weekStartIso);
+interface KstDay {
+  year: number;
+  month: number;
+  day: number;
+  weekday: number;
+  key: string;
+}
+
+const DAY_NAMES = ['월', '화', '수', '목', '금', '토', '일'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function toKstShifted(date: Date): Date {
+  return new Date(date.getTime() + KST_OFFSET_MS);
+}
+
+function fromKstShifted(shifted: Date): Date {
+  return new Date(shifted.getTime() - KST_OFFSET_MS);
+}
+
+function toKstParts(date: Date): KstDay {
+  const shifted = toKstShifted(date);
+  const year = shifted.getUTCFullYear();
+  const month = shifted.getUTCMonth() + 1;
+  const day = shifted.getUTCDate();
+  const weekday = shifted.getUTCDay();
+
+  return {
+    year,
+    month,
+    day,
+    weekday,
+    key: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+  };
+}
+
+function kstPartsToStableDate(year: number, month: number, day: number): Date {
+  const shiftedMs = Date.UTC(year, month - 1, day, 12, 0, 0, 0);
+  return fromKstShifted(new Date(shiftedMs));
+}
+
+function monthLabel(year: number, month: number): string {
+  return `${year}.${String(month).padStart(2, '0')}`;
+}
+
+function addKstDays(base: KstDay, delta: number): KstDay {
+  const shiftedMs = Date.UTC(base.year, base.month - 1, base.day, 12, 0, 0, 0) + delta * DAY_MS;
+  const shifted = new Date(shiftedMs);
+
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+    weekday: shifted.getUTCDay(),
+    key: `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')}`,
+  };
+}
+
+function buildCalendarDays(anchorYear: number, anchorMonth: number): KstDay[] {
+  const firstOfMonthShiftedMs = Date.UTC(anchorYear, anchorMonth - 1, 1, 12, 0, 0, 0);
+  const firstOfMonthShifted = new Date(firstOfMonthShiftedMs);
+  const dayOfWeek = firstOfMonthShifted.getUTCDay();
+  const daysFromMonday = (dayOfWeek + 6) % 7;
+  const firstCellShiftedMs = firstOfMonthShiftedMs - daysFromMonday * DAY_MS;
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const shifted = new Date(firstCellShiftedMs + index * DAY_MS);
+    const year = shifted.getUTCFullYear();
+    const month = shifted.getUTCMonth() + 1;
+    const day = shifted.getUTCDate();
+
+    return {
+      year,
+      month,
+      day,
+      weekday: shifted.getUTCDay(),
+      key: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    };
+  });
+}
+
+export function WeekNav({ weekStartIso, onSelectWeekStart, onMoveCurrentWeek }: WeekNavProps) {
+  const selectedWeekStart = new Date(weekStartIso);
+  const selectedKst = toKstParts(selectedWeekStart);
+  const [monthAnchor, setMonthAnchor] = useState({
+    year: selectedKst.year,
+    month: selectedKst.month,
+  });
+
+  useEffect(() => {
+    const next = toKstParts(new Date(weekStartIso));
+    setMonthAnchor({
+      year: next.year,
+      month: next.month,
+    });
+  }, [weekStartIso]);
+
   const nowWeekStart = getWeekPeriod(new Date()).start.toISOString();
   const isCurrentWeek = weekStartIso === nowWeekStart;
 
+  const calendarDays = useMemo(() => buildCalendarDays(monthAnchor.year, monthAnchor.month), [monthAnchor]);
+  const weekRows = useMemo(() => Array.from({ length: 6 }, (_, row) => calendarDays.slice(row * 7, row * 7 + 7)), [calendarDays]);
+
+  const selectedWeekKeys = useMemo(() => {
+    const weekStartKst = toKstParts(selectedWeekStart);
+    return new Set(Array.from({ length: 7 }, (_, index) => addKstDays(weekStartKst, index).key));
+  }, [selectedWeekStart]);
+
+  const onPickDay = (day: KstDay) => {
+    const stableDate = kstPartsToStableDate(day.year, day.month, day.day);
+    const weekStart = getWeekPeriod(stableDate).start;
+    onSelectWeekStart(weekStart.toISOString());
+  };
+
+  const todayKey = toKstParts(new Date()).key;
+
   return (
-    <View style={styles.wrap}>
-      <Pressable style={styles.navButton} onPress={() => onMoveWeek(-1)}>
-        <Text style={styles.navButtonText}>←</Text>
-      </Pressable>
-      <Text style={styles.label}>{formatWeekLabel(periodStart)}</Text>
-      <Pressable style={styles.navButton} onPress={() => onMoveWeek(1)}>
-        <Text style={styles.navButtonText}>→</Text>
-      </Pressable>
+    <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Pressable
+          style={styles.monthButton}
+          onPress={() =>
+            setMonthAnchor((prev) => {
+              const month = prev.month - 1;
+              if (month < 1) {
+                return { year: prev.year - 1, month: 12 };
+              }
+              return { year: prev.year, month };
+            })
+          }
+        >
+          <Text style={styles.monthButtonText}>←</Text>
+        </Pressable>
+        <Text style={styles.monthLabel}>{monthLabel(monthAnchor.year, monthAnchor.month)}</Text>
+        <Pressable
+          style={styles.monthButton}
+          onPress={() =>
+            setMonthAnchor((prev) => {
+              const month = prev.month + 1;
+              if (month > 12) {
+                return { year: prev.year + 1, month: 1 };
+              }
+              return { year: prev.year, month };
+            })
+          }
+        >
+          <Text style={styles.monthButtonText}>→</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.weekdayRow}>
+        {DAY_NAMES.map((name, idx) => (
+          <Text key={`${name}-${idx}`} style={styles.weekdayText}>
+            {name}
+          </Text>
+        ))}
+      </View>
+
+      <View style={styles.grid}>
+        {weekRows.map((row, rowIndex) => (
+          <View key={`week-row-${rowIndex}`} style={styles.weekRow}>
+            {row.map((day) => {
+              const isInMonth = day.month === monthAnchor.month;
+              const inSelectedWeek = selectedWeekKeys.has(day.key);
+              const isToday = day.key === todayKey;
+
+              return (
+                <Pressable
+                  key={day.key}
+                  style={[
+                    styles.dayCell,
+                    !isInMonth ? styles.dayOutOfMonth : undefined,
+                    inSelectedWeek ? styles.dayInSelectedWeek : undefined,
+                    isToday ? styles.dayToday : undefined,
+                  ]}
+                  onPress={() => onPickDay(day)}
+                >
+                  <Text
+                    style={[
+                      styles.dayText,
+                      !isInMonth ? styles.dayTextOutOfMonth : undefined,
+                      inSelectedWeek ? styles.dayTextSelectedWeek : undefined,
+                    ]}
+                  >
+                    {day.day}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+
       <Pressable
         style={[styles.currentButton, isCurrentWeek ? styles.currentButtonDisabled : undefined]}
         onPress={onMoveCurrentWeek}
@@ -33,23 +213,89 @@ export function WeekNav({ weekStartIso, onMoveWeek, onMoveCurrentWeek }: WeekNav
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  navButton: {
-    backgroundColor: '#1f2937',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  container: {
+    borderWidth: 1,
+    borderColor: '#2a2d36',
+    borderRadius: 14,
+    backgroundColor: '#121319',
+    padding: 10,
+    gap: 8,
   },
-  navButtonText: { color: '#fff', fontWeight: '700' },
-  label: { fontWeight: '700', fontSize: 16, color: '#111827', minWidth: 170 },
-  currentButton: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  monthButton: {
+    width: 30,
+    height: 30,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#0f766e',
+    borderColor: '#2a2d36',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1c24',
+  },
+  monthButtonText: { color: '#f2f4f8', fontWeight: '700' },
+  monthLabel: { color: '#f2f4f8', fontWeight: '700', fontSize: 15 },
+  weekdayRow: {
+    flexDirection: 'row',
+  },
+  weekdayText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#9aa1ae',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  grid: {
+    gap: 4,
+  },
+  weekRow: {
+    flexDirection: 'row',
+  },
+  dayCell: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: '#121319',
+    marginHorizontal: 2,
+  },
+  dayOutOfMonth: {
+    opacity: 0.45,
+  },
+  dayInSelectedWeek: {
+    borderColor: '#0a84ff',
+    backgroundColor: '#16263a',
+  },
+  dayToday: {
+    borderColor: '#4e5563',
+  },
+  dayText: {
+    color: '#f2f4f8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dayTextOutOfMonth: {
+    color: '#657083',
+  },
+  dayTextSelectedWeek: {
+    color: '#9ad5ff',
+  },
+  currentButton: {
+    marginTop: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#0a84ff',
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#ecfeff',
+    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#1a2538',
   },
   currentButtonDisabled: { opacity: 0.45 },
-  currentButtonText: { color: '#0f766e', fontWeight: '700' },
+  currentButtonText: { color: '#7cc3ff', fontWeight: '700' },
 });

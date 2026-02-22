@@ -5,8 +5,15 @@ import { useToast } from '@/src/components/toast/ToastProvider';
 import { selectTasksByPlan } from '@/src/state/selectors/planSelectors';
 import { selectCarryDraft } from '@/src/state/selectors/reviewSelectors';
 import { useAppStore } from '@/src/state/store';
+import { Icon } from '@/src/ui/components';
 
 const ACTIONS = ['carry', 'split', 'drop', 'rescope'] as const;
+const ACTION_LABELS: Record<(typeof ACTIONS)[number], string> = {
+  carry: '이월',
+  split: '쪼개기',
+  drop: '중단',
+  rescope: '재정의',
+};
 
 export default function CarryInboxModal() {
   const router = useRouter();
@@ -39,14 +46,14 @@ export default function CarryInboxModal() {
       }
 
       if (decision.action === 'rescope' && !decision.rescopeTitle.trim()) {
-        showToast(`"${task.title}"의 Rescope 제목을 입력하세요.`, 'error');
+        showToast(`"${task.title}"의 재정의 제목을 입력하세요.`, 'error');
         return false;
       }
 
       if (decision.action === 'split') {
         const validChildren = decision.splitTitles.map((title) => title.trim()).filter(Boolean);
         if (validChildren.length === 0) {
-          showToast(`"${task.title}"의 Split 하위 Task를 1개 이상 입력하세요.`, 'error');
+          showToast(`"${task.title}"의 쪼개기 하위 할 일을 1개 이상 입력하세요.`, 'error');
           return false;
         }
       }
@@ -65,7 +72,7 @@ export default function CarryInboxModal() {
     return (
       <View style={[styles.container, styles.empty]}>
         <Text style={styles.title}>미완료 정리</Text>
-        <Text style={styles.subtitle}>선택된 목표 플랜이 없습니다. Review에서 플랜을 먼저 선택하세요.</Text>
+        <Text style={styles.subtitle}>선택된 목표 플랜이 없습니다. 리뷰에서 플랜을 먼저 선택하세요.</Text>
       </View>
     );
   }
@@ -74,12 +81,15 @@ export default function CarryInboxModal() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
         <View style={styles.headerTexts}>
-          <Text style={styles.title}>미완료 정리</Text>
+          <View style={styles.inlineRow}>
+            <Icon name="inbox" size={18} color="#f2f4f8" />
+            <Text style={styles.title}>미완료 정리</Text>
+          </View>
           <Text style={styles.subtitle}>다음 주로 넘길지, 쪼갤지, 제외할지 결정하세요</Text>
-          <Text style={styles.goalName}>{goals[plan.goalId]?.title ?? 'Unknown Goal'}</Text>
+          <Text style={styles.goalName}>{goals[plan.goalId]?.title ?? '알 수 없는 목표'}</Text>
         </View>
         <Pressable style={styles.closeButton} onPress={() => router.dismiss()}>
-          <Text style={styles.closeButtonText}>X</Text>
+          <Icon name="x" size={14} color="#f2f4f8" />
         </Pressable>
       </View>
 
@@ -90,10 +100,10 @@ export default function CarryInboxModal() {
             plan.id,
             incompleteTasks.map((task) => task.id),
           );
-          showToast('미선택 항목을 carry로 지정했습니다.', 'info');
+          showToast('미선택 항목을 이월로 지정했습니다.', 'info');
         }}
       >
-        <Text style={styles.ghostButtonText}>일괄 Carry</Text>
+        <Text style={styles.ghostButtonText}>일괄 이월</Text>
       </Pressable>
 
       {incompleteTasks.map((task) => {
@@ -102,7 +112,7 @@ export default function CarryInboxModal() {
 
         return (
           <View key={task.id} style={styles.card}>
-            <Text style={styles.taskTitle}>{task.title}</Text>
+        <Text style={styles.taskTitle}>{task.title}</Text>
             <View style={styles.actionRow}>
               {ACTIONS.map((action) => (
                 <Pressable
@@ -113,7 +123,13 @@ export default function CarryInboxModal() {
                   ]}
                   onPress={() => setCarryDecision(plan.id, task.id, action)}
                 >
-                  <Text style={styles.actionText}>{action}</Text>
+                  <View style={styles.inlineRow}>
+                    {action === 'carry' ? <Icon name="corner-up-right" size={12} color="#f2f4f8" /> : null}
+                    {action === 'split' ? <Icon name="git-branch" size={12} color="#f2f4f8" /> : null}
+                    {action === 'drop' ? <Icon name="x-circle" size={12} color="#f2f4f8" /> : null}
+                    {action === 'rescope' ? <Icon name="circle-alert" size={12} color="#f2f4f8" /> : null}
+                    <Text style={styles.actionText}>{ACTION_LABELS[action]}</Text>
+                  </View>
                 </Pressable>
               ))}
             </View>
@@ -121,7 +137,7 @@ export default function CarryInboxModal() {
             {decision?.action === 'drop' ? (
               <TextInput
                 style={styles.input}
-                placeholder="Drop 사유 (선택)"
+                placeholder="중단 사유 (선택)"
                 value={decision.note}
                 onChangeText={(text) => setDropNote(plan.id, task.id, text)}
               />
@@ -136,7 +152,7 @@ export default function CarryInboxModal() {
                   onChangeText={(text) => setRescopeTitle(plan.id, task.id, text)}
                 />
                 {!decision.rescopeTitle.trim() ? (
-                  <Text style={styles.warningText}>Rescope 제목이 필요합니다.</Text>
+                  <Text style={styles.warningText}>재정의 제목이 필요합니다.</Text>
                 ) : null}
               </>
             ) : null}
@@ -157,13 +173,16 @@ export default function CarryInboxModal() {
                   />
                 ))}
                 {splitTitles.map((title) => title.trim()).filter(Boolean).length === 0 ? (
-                  <Text style={styles.warningText}>Split 하위 Task를 1개 이상 입력하세요.</Text>
+                  <Text style={styles.warningText}>쪼개기 하위 할 일을 1개 이상 입력하세요.</Text>
                 ) : null}
                 <Pressable
                   style={styles.smallButton}
                   onPress={() => setSplitChildren(plan.id, task.id, [...splitTitles, ''])}
                 >
-                  <Text style={styles.smallButtonText}>+ 하위 할 일 추가</Text>
+                  <View style={styles.inlineRow}>
+                    <Icon name="plus" size={12} color="#f2f4f8" />
+                    <Text style={styles.smallButtonText}>하위 할 일 추가</Text>
+                  </View>
                 </Pressable>
               </View>
             ) : null}
@@ -184,6 +203,7 @@ const styles = StyleSheet.create({
   empty: { padding: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   headerTexts: { flex: 1, gap: 2 },
+  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { fontSize: 22, fontWeight: '700' },
   subtitle: { color: '#9aa1ae' },
   goalName: { color: '#f2f4f8', fontWeight: '700' },

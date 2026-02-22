@@ -1,21 +1,13 @@
 import { useMemo, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { WeekNav } from '@/src/components/WeekNav';
 import { useToast } from '@/src/components/toast/ToastProvider';
-import { getNextWeekPeriodFromStart, getWeekPeriod } from '@/src/core/time/week';
+import { formatWeekLabel, getNextWeekPeriodFromStart, getWeekPeriod } from '@/src/core/time/week';
 import { assignTaskToGoalWeek } from '@/src/services/taskService';
 import { useAppStore } from '@/src/state/store';
-
-const WEEK_CHOICES = ['this', 'next', 'custom'] as const;
-
-type WeekChoice = (typeof WEEK_CHOICES)[number];
-
-function normalizeWeekStartIso(input?: string): string {
-  if (!input) return getWeekPeriod(new Date()).start.toISOString();
-  const parsed = new Date(input);
-  if (Number.isNaN(parsed.getTime())) return getWeekPeriod(new Date()).start.toISOString();
-  return getWeekPeriod(parsed).start.toISOString();
-}
+import { BRAND_NAME_FULL } from '@/src/ui/branding';
+import { GoalDueBadge, Icon } from '@/src/ui/components';
 
 export default function AssignGoalModal() {
   const router = useRouter();
@@ -32,8 +24,10 @@ export default function AssignGoalModal() {
 
   const [search, setSearch] = useState('');
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
-  const [weekChoice, setWeekChoice] = useState<WeekChoice>('this');
-  const [customDateInput, setCustomDateInput] = useState('');
+
+  const thisWeekStartIso = useMemo(() => getWeekPeriod(new Date()).start.toISOString(), []);
+  const nextWeekStartIso = useMemo(() => getNextWeekPeriodFromStart(new Date(thisWeekStartIso)).start.toISOString(), [thisWeekStartIso]);
+  const [targetWeekStartIso, setTargetWeekStartIso] = useState<string>(thisWeekStartIso);
 
   const task = taskId ? tasks[taskId] : null;
 
@@ -57,16 +51,9 @@ export default function AssignGoalModal() {
       .slice(0, 5);
   }, [goals, recentGoalIds, search]);
 
-  const targetWeekStartIso = useMemo(() => {
-    const thisWeekStart = getWeekPeriod(new Date()).start;
-    if (weekChoice === 'this') return thisWeekStart.toISOString();
-    if (weekChoice === 'next') return getNextWeekPeriodFromStart(thisWeekStart).start.toISOString();
-    return normalizeWeekStartIso(customDateInput);
-  }, [customDateInput, weekChoice]);
-
   const confirmAssign = () => {
     if (!taskId || !task) {
-      showToast('유효하지 않은 task입니다.', 'error');
+      showToast('유효하지 않은 할 일입니다.', 'error');
       return;
     }
     if (!selectedGoalId) {
@@ -83,14 +70,14 @@ export default function AssignGoalModal() {
     pushRecentGoal(selectedGoalId);
     setSelectedWeekStart(targetWeekStartIso);
     setSelectedPlanId(destinationPlanId);
-    showToast('Task를 목표 플랜으로 이동했습니다.', 'success');
+    showToast('할 일을 목표 플랜으로 이동했습니다.', 'success');
     router.replace(`/plan/${destinationPlanId}`);
   };
 
   if (!taskId || !task || task.deletedAt) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.title}>Assign할 task를 찾을 수 없습니다.</Text>
+        <Text style={styles.title}>배정할 할 일을 찾을 수 없습니다.</Text>
         <Pressable style={styles.ghostButton} onPress={() => router.dismiss()}>
           <Text style={styles.ghostButtonText}>닫기</Text>
         </Pressable>
@@ -103,23 +90,43 @@ export default function AssignGoalModal() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Stack.Screen
+        options={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#0b0b0f' },
+          headerStyle: { backgroundColor: '#0b0b0f' },
+          headerTintColor: '#f2f4f8',
+        }}
+      />
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Assign Goal</Text>
+        <View style={styles.titleWrap}>
+          <Text style={styles.title}>{BRAND_NAME_FULL}</Text>
+          <Text style={styles.subtitle}>목표 배정</Text>
+        </View>
         <Pressable style={styles.ghostButton} onPress={() => router.dismiss()}>
-          <Text style={styles.ghostButtonText}>Close</Text>
+          <View style={styles.inlineRow}>
+            <Icon name="x" size={14} color="#f2f4f8" />
+            <Text style={styles.ghostButtonText}>닫기</Text>
+          </View>
         </Pressable>
       </View>
 
-      <Text style={styles.meta}>Task: {task.title}</Text>
+      <Text style={styles.meta}>할 일: {task.title}</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="Goal 검색"
+        placeholder="목표 검색"
+        placeholderTextColor="#7f8796"
         value={search}
         onChangeText={setSearch}
       />
 
-      {recentGoals.length > 0 ? <Text style={styles.sectionTitle}>최근 Goal</Text> : null}
+      {recentGoals.length > 0 ? (
+        <View style={styles.inlineRow}>
+          <Icon name="check-circle" size={15} color="#7cc3ff" />
+          <Text style={styles.sectionTitle}>최근 목표</Text>
+        </View>
+      ) : null}
       {recentGoals.map((goal) => (
         <Pressable
           key={goal.id}
@@ -127,11 +134,16 @@ export default function AssignGoalModal() {
           onPress={() => setSelectedGoalId(goal.id)}
         >
           <Text style={styles.cardTitle}>{goal.title}</Text>
+          <GoalDueBadge goal={goal} style={styles.badgeSpacing} />
           <Text style={styles.meta}>{goal.description || '-'}</Text>
         </Pressable>
       ))}
 
-      <Text style={styles.sectionTitle}>목표 선택</Text>
+      <View style={styles.inlineRow}>
+        <Icon name="target" size={15} color="#7cc3ff" />
+        <Text style={styles.sectionTitle}>목표 선택</Text>
+      </View>
+      {otherGoals.length === 0 ? <Text style={styles.meta}>선택 가능한 목표가 없습니다.</Text> : null}
       {otherGoals.map((goal) => (
         <Pressable
           key={goal.id}
@@ -139,45 +151,39 @@ export default function AssignGoalModal() {
           onPress={() => setSelectedGoalId(goal.id)}
         >
           <Text style={styles.cardTitle}>{goal.title}</Text>
+          <GoalDueBadge goal={goal} style={styles.badgeSpacing} />
           <Text style={styles.meta}>{goal.description || '-'}</Text>
         </Pressable>
       ))}
 
-      <Text style={styles.sectionTitle}>Week 선택</Text>
-      <View style={styles.row}>
+      <View style={styles.inlineRow}>
+        <Icon name="calendar" size={15} color="#7cc3ff" />
+        <Text style={styles.sectionTitle}>주차 선택</Text>
+      </View>
+      <View style={styles.quickWeekRow}>
         <Pressable
-          style={[styles.chip, weekChoice === 'this' ? styles.chipSelected : undefined]}
-          onPress={() => setWeekChoice('this')}
+          style={[styles.chip, targetWeekStartIso === thisWeekStartIso ? styles.chipSelected : undefined]}
+          onPress={() => setTargetWeekStartIso(thisWeekStartIso)}
         >
           <Text style={styles.chipText}>이번 주</Text>
         </Pressable>
         <Pressable
-          style={[styles.chip, weekChoice === 'next' ? styles.chipSelected : undefined]}
-          onPress={() => setWeekChoice('next')}
+          style={[styles.chip, targetWeekStartIso === nextWeekStartIso ? styles.chipSelected : undefined]}
+          onPress={() => setTargetWeekStartIso(nextWeekStartIso)}
         >
           <Text style={styles.chipText}>다음 주</Text>
         </Pressable>
-        <Pressable
-          style={[styles.chip, weekChoice === 'custom' ? styles.chipSelected : undefined]}
-          onPress={() => setWeekChoice('custom')}
-        >
-          <Text style={styles.chipText}>직접 지정</Text>
-        </Pressable>
       </View>
 
-      {weekChoice === 'custom' ? (
-        <TextInput
-          style={styles.input}
-          placeholder="YYYY-MM-DD"
-          value={customDateInput}
-          onChangeText={setCustomDateInput}
-        />
-      ) : null}
-
-      <Text style={styles.meta}>대상 주 시작: {targetWeekStartIso}</Text>
+      <WeekNav
+        weekStartIso={targetWeekStartIso}
+        onSelectWeekStart={setTargetWeekStartIso}
+        onMoveCurrentWeek={() => setTargetWeekStartIso(thisWeekStartIso)}
+      />
+      <Text style={styles.meta}>선택된 주: {formatWeekLabel(new Date(targetWeekStartIso))}</Text>
 
       <Pressable style={styles.primaryButton} onPress={confirmAssign}>
-        <Text style={styles.primaryButtonText}>Confirm Assign</Text>
+        <Text style={styles.primaryButtonText}>배정 완료</Text>
       </Pressable>
     </ScrollView>
   );
@@ -185,11 +191,14 @@ export default function AssignGoalModal() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0b0f' },
-  center: { alignItems: 'center', justifyContent: 'center', padding: 16 },
+  center: { alignItems: 'center', justifyContent: 'center', padding: 16, gap: 10 },
   content: { padding: 16, gap: 10 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: '700' },
-  sectionTitle: { fontSize: 15, fontWeight: '700' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
+  titleWrap: { gap: 2 },
+  title: { fontSize: 18, fontWeight: '700', color: '#f2f4f8' },
+  subtitle: { fontSize: 18, fontWeight: '700', color: '#f2f4f8' },
+  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#f2f4f8', marginTop: 4 },
   input: {
     borderRadius: 10,
     borderWidth: 1,
@@ -197,6 +206,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#121319',
     paddingHorizontal: 10,
     paddingVertical: 8,
+    color: '#f2f4f8',
   },
   card: {
     borderRadius: 10,
@@ -206,13 +216,14 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 4,
   },
-  cardSelected: { borderColor: '#0a84ff', backgroundColor: '#1a1c24' },
-  cardTitle: { fontWeight: '700' },
-  row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  cardSelected: { borderColor: '#0a84ff', backgroundColor: '#1a2538' },
+  cardTitle: { fontWeight: '700', color: '#f2f4f8' },
+  badgeSpacing: { marginTop: 4, marginBottom: 2 },
+  quickWeekRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#2a2d36',
     paddingHorizontal: 12,
     paddingVertical: 6,
     backgroundColor: '#121319',
@@ -225,8 +236,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a84ff',
     paddingVertical: 12,
     alignItems: 'center',
+    marginTop: 4,
   },
-  primaryButtonText: { color: '#121319', fontWeight: '700' },
+  primaryButtonText: { color: '#ffffff', fontWeight: '700' },
   ghostButton: {
     borderRadius: 8,
     borderWidth: 1,

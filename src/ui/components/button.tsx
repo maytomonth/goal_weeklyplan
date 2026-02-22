@@ -1,4 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
+import { ReactNode } from 'react';
 import { Pressable, PressableProps, Text } from 'react-native';
 import { cn } from '@/src/ui/lib/cn';
 
@@ -51,6 +52,8 @@ interface ButtonProps extends PressableProps, VariantProps<typeof buttonVariants
   label: string;
   className?: string;
   textClassName?: string;
+  iconLeft?: ReactNode;
+  iconRight?: ReactNode;
 }
 
 export function Button({
@@ -61,15 +64,19 @@ export function Button({
   className,
   textClassName,
   disabled,
+  iconLeft,
+  iconRight,
   ...props
 }: ButtonProps) {
   return (
     <Pressable
-      className={cn(buttonVariants({ variant, size, full }), disabled ? 'opacity-45' : '', className)}
+      className={cn(buttonVariants({ variant, size, full }), 'flex-row gap-2', disabled ? 'opacity-45' : '', className)}
       disabled={disabled}
       {...props}
     >
+      {iconLeft}
       <Text className={cn(buttonTextVariants({ variant, size }), textClassName)}>{label}</Text>
+      {iconRight}
     </Pressable>
   );
 }

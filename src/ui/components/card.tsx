@@ -7,5 +7,5 @@ interface CardProps extends PropsWithChildren {
 }
 
 export function Card({ className, children }: CardProps) {
-  return <View className={cn('rounded-card border border-border bg-surface p-3', className)}>{children}</View>;
+  return <View className={cn('rounded-card border border-border bg-surface p-4 gap-3', className)}>{children}</View>;
 }

@@ -7,5 +7,5 @@ interface SurfaceProps extends PropsWithChildren {
 }
 
 export function Surface({ className, children }: SurfaceProps) {
-  return <View className={cn('rounded-card border border-border bg-surface p-3', className)}>{children}</View>;
+  return <View className={cn('rounded-card border border-border bg-surface p-4 gap-3', className)}>{children}</View>;
 }

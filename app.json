@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Goal Tracker MVP1",
-    "slug": "goal-tracker-mvp1",
+    "name": "GoalPlan Plus",
+    "slug": "goalplan-plus",
     "scheme": "goaltracker",
     "plugins": ["expo-router"],
     "experiments": {

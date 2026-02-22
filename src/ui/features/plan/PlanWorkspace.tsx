@@ -5,7 +5,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { WeekNav } from '@/src/components/WeekNav';
 import { useToast } from '@/src/components/toast/ToastProvider';
 import { Task } from '@/src/core/types/domain';
-import { getWeekPeriod } from '@/src/core/time/week';
+import { getWeekPeriod, isoInstantEquals } from '@/src/core/time/week';
 import { isBlank, normalizeTitle } from '@/src/core/validation/form';
 import { deleteWeeklyPlan } from '@/src/services/planService';
 import { softDeleteTask, undoSoftDeleteTask } from '@/src/services/taskService';
@@ -44,7 +44,9 @@ export function PlanWorkspace({ routePlanId, mobileView }: PlanWorkspaceProps) {
   const period = useMemo(() => {
     if (selectedWeekStartIso) {
       const start = new Date(selectedWeekStartIso);
-      return { start, end: new Date(start.getTime() + 7 * DAY_MS) };
+      if (!Number.isNaN(start.getTime())) {
+        return { start, end: new Date(start.getTime() + 7 * DAY_MS) };
+      }
     }
     return getWeekPeriod(new Date());
   }, [selectedWeekStartIso]);
@@ -68,6 +70,14 @@ export function PlanWorkspace({ routePlanId, mobileView }: PlanWorkspaceProps) {
   const effectiveSelectedPlanId = routePlanId ?? selectedPlanId;
   const selectedPlan = useAppStore((state) => (effectiveSelectedPlanId ? state.plans[effectiveSelectedPlanId] : null));
   const selectedTasks = useAppStore((state) => (selectedPlan ? selectTasksByPlan(state, selectedPlan.id) : []));
+
+  useEffect(() => {
+    if (!selectedPlan) return;
+    if (selectedWeekStartIso && isoInstantEquals(selectedWeekStartIso, selectedPlan.periodStart)) {
+      return;
+    }
+    setSelectedWeekStart(selectedPlan.periodStart);
+  }, [selectedPlan, selectedWeekStartIso, setSelectedWeekStart]);
 
   const top3Tasks = useMemo(() => {
     if (!selectedPlan) return [];

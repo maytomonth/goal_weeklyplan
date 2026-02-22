@@ -7,7 +7,15 @@ function safeWeekStart(weekStartIso?: string): Date {
     return getWeekPeriod(new Date()).start;
   }
 
-  const parsed = new Date(weekStartIso);
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(weekStartIso);
+    } catch {
+      return weekStartIso;
+    }
+  })();
+
+  const parsed = new Date(decoded);
   if (Number.isNaN(parsed.getTime())) {
     return getWeekPeriod(new Date()).start;
   }

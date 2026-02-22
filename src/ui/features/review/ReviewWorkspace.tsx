@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { WeekNav } from '@/src/components/WeekNav';
 import { useToast } from '@/src/components/toast/ToastProvider';
 import { CarryActionType } from '@/src/core/types/domain';
-import { getWeekPeriod } from '@/src/core/time/week';
+import { getWeekPeriod, isoInstantEquals } from '@/src/core/time/week';
 import { applyCarryActionsAndEnsureNextPlan } from '@/src/services/carryService';
 import { selectTasksByPlan, selectWeeklyPlansForWeek } from '@/src/state/selectors/planSelectors';
 import { selectCarryDraft, selectCarryReady, selectCompletionRate, selectReviewByPlan } from '@/src/state/selectors/reviewSelectors';
@@ -48,7 +48,9 @@ export function ReviewWorkspace({ routePlanId, mobileView }: ReviewWorkspaceProp
   const period = useMemo(() => {
     if (selectedWeekStartIso) {
       const start = new Date(selectedWeekStartIso);
-      return { start, end: new Date(start.getTime() + 7 * DAY_MS) };
+      if (!Number.isNaN(start.getTime())) {
+        return { start, end: new Date(start.getTime() + 7 * DAY_MS) };
+      }
     }
     return getWeekPeriod(new Date());
   }, [selectedWeekStartIso]);
@@ -74,6 +76,14 @@ export function ReviewWorkspace({ routePlanId, mobileView }: ReviewWorkspaceProp
   const carryDraft = useAppStore((state) => (plan ? selectCarryDraft(state, plan.id) : {}));
   const isCarryApplied = useAppStore((state) => (plan ? Boolean(state.appliedCarryByPlanId[plan.id]) : false));
   const review = useAppStore((state) => (plan ? selectReviewByPlan(state, plan.id) : null));
+
+  useEffect(() => {
+    if (!plan) return;
+    if (selectedWeekStartIso && isoInstantEquals(selectedWeekStartIso, plan.periodStart)) {
+      return;
+    }
+    setSelectedWeekStart(plan.periodStart);
+  }, [plan, selectedWeekStartIso, setSelectedWeekStart]);
 
   const todoTasks = tasks.filter((task) => task.status === 'todo');
   const doneCount = tasks.filter((task) => task.status === 'done').length;

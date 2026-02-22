@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { getWeekPeriod } from '@/src/core/time/week';
+import { getWeekPeriod, isoInstantEquals } from '@/src/core/time/week';
 import { useAppStore } from '@/src/state/store';
 import { BRAND_NAME_FULL } from '@/src/ui/branding';
 import { GoalDueBadge, Icon } from '@/src/ui/components';
@@ -10,7 +10,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 function safeWeekStart(input?: string): string {
   if (!input) return getWeekPeriod(new Date()).start.toISOString();
-  const date = new Date(input);
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(input);
+    } catch {
+      return input;
+    }
+  })();
+  const date = new Date(decoded);
   if (Number.isNaN(date.getTime())) return getWeekPeriod(new Date()).start.toISOString();
   return getWeekPeriod(date).start.toISOString();
 }
@@ -44,7 +51,7 @@ export default function GoalPickerModal() {
   const existingPlanIdByGoalId = useMemo(() => {
     const map: Record<string, string> = {};
     Object.values(plans)
-      .filter((plan) => plan.type === 'week' && plan.periodStart === weekStartIso)
+      .filter((plan) => plan.type === 'week' && isoInstantEquals(plan.periodStart, weekStartIso))
       .forEach((plan) => {
         map[plan.goalId] = plan.id;
       });

@@ -6,6 +6,27 @@ export interface WeekPeriod {
   end: Date;
 }
 
+export function canonicalIso(input: string): string {
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) {
+    return input;
+  }
+  return parsed.toISOString();
+}
+
+export function isoInstantEquals(left: string, right: string): boolean {
+  const leftParsed = new Date(left);
+  const rightParsed = new Date(right);
+
+  const leftValid = !Number.isNaN(leftParsed.getTime());
+  const rightValid = !Number.isNaN(rightParsed.getTime());
+  if (leftValid && rightValid) {
+    return leftParsed.getTime() === rightParsed.getTime();
+  }
+
+  return left === right;
+}
+
 function toKstShifted(date: Date): Date {
   return new Date(date.getTime() + KST_OFFSET_MS);
 }

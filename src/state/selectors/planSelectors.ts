@@ -1,24 +1,30 @@
 import { AppStore } from '@/src/state/types';
+import { isoInstantEquals } from '@/src/core/time/week';
 
 function isSystemInboxGoal(state: AppStore, goalId: string): boolean {
   return state.goals[goalId]?.systemType === 'inbox';
 }
 
 export function selectPlanByPeriod(state: AppStore, periodStartIso: string) {
-  return Object.values(state.plans).find((plan) => plan.type === 'week' && plan.periodStart === periodStartIso) ?? null;
+  return (
+    Object.values(state.plans).find(
+      (plan) => plan.type === 'week' && isoInstantEquals(plan.periodStart, periodStartIso),
+    ) ?? null
+  );
 }
 
 export function selectPlanByPeriodAndGoal(state: AppStore, periodStartIso: string, goalId: string) {
   return (
     Object.values(state.plans).find(
-      (plan) => plan.type === 'week' && plan.periodStart === periodStartIso && plan.goalId === goalId,
+      (plan) =>
+        plan.type === 'week' && isoInstantEquals(plan.periodStart, periodStartIso) && plan.goalId === goalId,
     ) ?? null
   );
 }
 
 export function selectPlansByPeriod(state: AppStore, periodStartIso: string) {
   return Object.values(state.plans)
-    .filter((plan) => plan.type === 'week' && plan.periodStart === periodStartIso)
+    .filter((plan) => plan.type === 'week' && isoInstantEquals(plan.periodStart, periodStartIso))
     .filter((plan) => !isSystemInboxGoal(state, plan.goalId))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
@@ -30,7 +36,7 @@ export function selectWeeklyPlansForWeek(
 ) {
   if (options?.includeSystemInbox) {
     return Object.values(state.plans)
-      .filter((plan) => plan.type === 'week' && plan.periodStart === periodStartIso)
+      .filter((plan) => plan.type === 'week' && isoInstantEquals(plan.periodStart, periodStartIso))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
   return selectPlansByPeriod(state, periodStartIso);

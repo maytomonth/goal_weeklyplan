@@ -101,4 +101,34 @@ describe('plan selectors - inbox filtering', () => {
 
     expect(selectInboxTasks(store).map((task) => task.id)).toEqual(['task_inbox_live']);
   });
+
+  it('matches weekly plans even when ISO string format differs (+00:00 vs Z)', () => {
+    const store = makeTestStore({
+      plans: [
+        {
+          id: 'plan_tz_format',
+          type: 'week',
+          periodStart: '2026-02-22T15:00:00+00:00',
+          periodEnd: END,
+          goalId: 'goal_a',
+          note: '',
+          top3TaskIds: [],
+          createdAt: '2026-02-22T15:00:01.000Z',
+          updatedAt: '2026-02-22T15:00:01.000Z',
+        },
+      ],
+    });
+
+    store.goals.goal_a = {
+      id: 'goal_a',
+      title: '일반 목표',
+      dueType: 'none',
+      status: 'active',
+      createdAt: START,
+      updatedAt: START,
+    };
+
+    const plans = selectWeeklyPlansForWeek(store, '2026-02-22T15:00:00.000Z');
+    expect(plans.map((plan) => plan.id)).toEqual(['plan_tz_format']);
+  });
 });

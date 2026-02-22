@@ -1,16 +1,18 @@
 import type { StateCreator } from 'zustand';
-import { nowIso } from '@/src/core/time/week';
+import { canonicalIso, isoInstantEquals, nowIso } from '@/src/core/time/week';
 import { createId } from '@/src/state/helpers';
 import { AppStore, PlansSlice } from '@/src/state/types';
 
 export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set, get) => ({
   plans: {},
   ensureGoalWeeklyPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
+    const normalizedStartIso = canonicalIso(periodStartIso);
+    const normalizedEndIso = canonicalIso(periodEndIso);
     const resolvedGoalId = goalId;
     const existing = Object.values(get().plans).find(
       (plan) =>
         plan.type === 'week' &&
-        plan.periodStart === periodStartIso &&
+        isoInstantEquals(plan.periodStart, normalizedStartIso) &&
         plan.goalId === resolvedGoalId,
     );
 
@@ -27,8 +29,8 @@ export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set
         [id]: {
           id,
           type: 'week',
-          periodStart: periodStartIso,
-          periodEnd: periodEndIso,
+          periodStart: normalizedStartIso,
+          periodEnd: normalizedEndIso,
           goalId: resolvedGoalId,
           note: '',
           top3TaskIds: [],
@@ -37,7 +39,7 @@ export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set
           updatedAt: timestamp,
         },
       },
-      selectedWeekStartIso: state.selectedWeekStartIso ?? periodStartIso,
+      selectedWeekStartIso: state.selectedWeekStartIso ?? normalizedStartIso,
       selectedPlanId: state.selectedPlanId ?? id,
     }));
 
@@ -45,7 +47,8 @@ export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set
   },
   getWeekPlan: (periodStartIso, goalId) =>
     Object.values(get().plans).find(
-      (plan) => plan.type === 'week' && plan.periodStart === periodStartIso && plan.goalId === goalId,
+      (plan) =>
+        plan.type === 'week' && isoInstantEquals(plan.periodStart, periodStartIso) && plan.goalId === goalId,
     ) ?? null,
   ensureWeekPlan: (periodStartIso, periodEndIso, goalId, sourcePlanId) => {
     const resolvedGoalId = goalId ?? get().ensureInboxGoal();
@@ -184,6 +187,6 @@ export const createPlansSlice: StateCreator<AppStore, [], [], PlansSlice> = (set
     });
   },
   setSelectedWeekStart: (periodStartIso) => {
-    set({ selectedWeekStartIso: periodStartIso });
+    set({ selectedWeekStartIso: canonicalIso(periodStartIso) });
   },
 });

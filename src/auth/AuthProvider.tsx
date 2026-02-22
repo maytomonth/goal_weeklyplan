@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabaseClient';
+import { stopSyncOnChange, syncOnLogin } from '@/src/sync/syncService';
 
 interface AuthContextValue {
   session: Session | null;
@@ -43,6 +44,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      stopSyncOnChange();
+      return;
+    }
+
+    let cancelled = false;
+    void syncOnLogin(userId).catch((error) => {
+      if (!cancelled) {
+        console.warn('[sync] syncOnLogin failed', error);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
 
   const signInWithEmailPassword = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

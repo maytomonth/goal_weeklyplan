@@ -83,5 +83,40 @@
 - 기대: Goal + 연결 WeeklyPlan/Task/Review/CarryAction cascade 삭제, 최근 goal 목록에서도 제거
 - 결과: 통과
 
+16. Inbox Quick Add(기본 이번 주)
+- 절차: Inbox 탭에서 Quick Add 입력 후 Add
+- 기대: Inbox Goal(systemType=inbox)의 이번 주 WeeklyPlan에 todo task 생성
+- 결과: 통과
+
+17. Inbox 전용 노출
+- 절차: Inbox task를 만든 뒤 Plan/Review/Goals 허브 진입
+- 기대: system inbox goal plan이 허브 리스트에 노출되지 않음, Inbox 탭에서만 노출
+- 결과: 통과
+
+18. Assign(이번 주) 재배치
+- 절차: Inbox task에서 Assign → Goal 선택 → 이번 주 선택 → Confirm
+- 기대: task entity가 clone 없이 재배치되고(`planId`,`goalId` 변경), 대상 goal weekly plan으로 이동
+- 결과: 통과
+
+19. Assign(다음 주/직접 지정) 플랜 자동 생성
+- 절차: Assign에서 다음 주 또는 직접 지정 선택 후 Confirm
+- 기대: `ensureGoalWeeklyPlan(weekStart, goalId)`로 destination plan 자동 생성/재사용 후 task 이동
+- 결과: 통과
+
+20. Inbox Delete + Undo(10초)
+- 절차: Inbox 목록에서 Delete → 토스트 Undo 클릭
+- 기대: 삭제 즉시 숨김, Undo 시 `deletedAt=null`로 복원
+- 결과: 통과
+
+21. Trash 복원/영구삭제 (Inbox task)
+- 절차: Inbox에서 삭제 후 Trash 모달에서 복원/영구삭제 실행
+- 기대: 복원 시 Inbox 목록 재노출, 영구삭제 시 엔티티 완전 제거
+- 결과: 통과
+
+22. Inbox/일반 task 삭제 시 Top3 정합성
+- 절차: Plan Detail에서 Top3로 지정한 task를 Delete 처리 후 Top3 확인
+- 기대: 삭제된 task id는 해당 plan.top3TaskIds에서 제거되어 dangling reference 없음
+- 결과: 통과
+
 ## 비고
 - `npm run web` 기본 포트(8081)가 이미 사용 중이면 `npm run web -- --port 8082`로 검증.
